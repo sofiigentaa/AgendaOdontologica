@@ -1,0 +1,38 @@
+<svg viewBox="0 0 310 155" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Candy 'C' -->
+  <g id="candy-letter-c">
+    <!-- Top wrapper wing -->
+    <path d="M 28 40 C 21 28, 12 14, 17 5 C 26 3, 38 10, 45 4 C 52 10, 64 3, 73 5 C 78 14, 69 28, 62 40 Z" fill="#6C8EBF"/>
+    <path d="M 30 8 C 35 18, 41 29, 44 37" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.8"/>
+    <path d="M 59 8 C 55 18, 49 29, 46 37" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.8"/>
+    <rect x="26" y="38" width="38" height="4" rx="2" fill="#5A7BA8" />
+
+    <!-- Letter 'C' Curve -->
+    <path d="M 66 52 C 58 46, 47 43, 36 47 C 22 53, 16 67, 17 79 C 18 90, 25 101, 38 104 C 48 107, 59 104, 65 97" stroke="#6C8EBF" stroke-width="14.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 26 61 C 23 69, 23 79, 27 88" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-opacity="0.85"/>
+
+    <!-- Bottom wrapper wing -->
+    <rect x="26" y="103" width="38" height="4" rx="2" fill="#5A7BA8" />
+    <path d="M 28 105 C 21 117, 12 131, 17 140 C 26 142, 38 135, 45 141 C 52 135, 64 142, 73 140 C 78 131, 69 117, 62 105 Z" fill="#6C8EBF"/>
+    <path d="M 30 137 C 35 127, 41 116, 44 108" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.8"/>
+    <path d="M 59 137 C 55 127, 49 116, 46 108" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.8"/>
+  </g>
+
+  <!-- Letter 'a' -->
+  <circle cx="103" cy="80" r="19" stroke="#F6A2B3" stroke-width="11" fill="none" />
+  <path d="M 121 62 L 121 95 C 121 97, 122 99, 125 99" stroke="#F6A2B3" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Letter 'n' -->
+  <path d="M 142 99 L 142 66 C 142 63, 150 58, 162 58 C 174 58, 181 65, 181 74 L 181 99" stroke="#9FDAF0" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Letter 'd' -->
+  <circle cx="206" cy="80" r="19" stroke="#BCAAD8" stroke-width="11" fill="none" />
+  <path d="M 224 38 L 224 95 C 224 97, 225 99, 228 99" stroke="#BCAAD8" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Letter 'y' -->
+  <path d="M 246 62 L 257 82" stroke="#F8DE7E" stroke-width="11" stroke-linecap="round"/>
+  <path d="M 278 62 L 253 103 C 248 111, 241 115, 234 113" stroke="#F8DE7E" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Subtitle tucked inward under 'andy' -->
+  <text x="96" y="138" text-anchor="start" fill="#64788D" font-size="16.5" font-weight="800" letter-spacing="2" font-family="system-ui, -apple-system, sans-serif">SALÓN DE EVENTOS</text>
+</svg>

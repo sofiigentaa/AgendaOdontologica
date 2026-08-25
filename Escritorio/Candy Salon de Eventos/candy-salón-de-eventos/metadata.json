@@ -1,0 +1,7 @@
+{
+  "name": "Candy Salón de Eventos",
+  "description": "Sistema de gestión y seguimiento de eventos, registro de fechas, señas abonadas, saldos en $ARS y recordatorios para Candy Salón de Eventos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
