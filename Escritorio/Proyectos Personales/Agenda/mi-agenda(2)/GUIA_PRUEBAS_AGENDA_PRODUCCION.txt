@@ -1,0 +1,127 @@
+================================================================================
+GUÍA Y CHECKLIST DE PRUEBAS DE LA AGENDA ODONTOLÓGICA (PASO A PRODUCCIÓN)
+================================================================================
+Dras. Marie y Yani - Consultorio Odontológico
+Fecha de creación: 2026
+
+Este archivo contiene el paso a paso detallado para validar todas las 
+funcionalidades de la aplicación antes de su uso diario en producción.
+
+--------------------------------------------------------------------------------
+MÓDULO 1: GESTIÓN DE PACIENTES Y FICHAS CLÍNICAS
+--------------------------------------------------------------------------------
+[ ] 1.1 Crear un nuevo paciente:
+    - Hacer clic en "Nuevo Paciente" o "+ Paciente".
+    - Ingresar Nombre, Apellido, Celular (+54...), Teléfono fijo, DNI, Email.
+    - Seleccionar Obra Social (ej: OSDE, Swiss Medical, IOMA, PAMI, etc.) 
+      o marcar como "Particular".
+    - Ingresar Número de Afiliado y Plan si corresponde.
+    - Agregar Notas o Antecedentes Médicos relevantes (ej: Alérgico a penicilina).
+    - Guardar y verificar que aparezca en la lista de pacientes.
+
+[ ] 1.2 Búsqueda y Filtros de Pacientes:
+    - Escribir en la barra de búsqueda por: Nombre, Apellido, DNI o Teléfono.
+    - Probar los filtros rápidos por Obra Social y por Particular.
+    - Verificar que el contador de pacientes coincida con los resultados.
+
+[ ] 1.3 Ficha del Paciente (Detalle completo):
+    - Abrir la ficha de un paciente haciendo clic en su tarjeta.
+    - Verificar datos personales y de contacto.
+    - Probar los botones de acción rápida:
+      * Botón WhatsApp: Debe abrir chat directo con mensaje formal.
+      * Botón Llamar: Debe abrir el marcador telefónico.
+      * Botón Compartir: Probar compartir como texto o descargar vCard.
+    - Probar la sección de Notas y Evolución clínica:
+      * Escribir una nueva nota de consulta y guardar.
+      * Verificar que quede registrada con fecha y hora.
+    - Probar la sección de Archivos Adjuntos:
+      * Subir una radiografía o estudio (JPG, PNG o PDF).
+      * Presionar el botón "Abrir" y verificar que se visualice en pantalla 
+        completa en el visor integrado (sin forzar descarga).
+      * Cerrar el visor y volver a la ficha.
+
+--------------------------------------------------------------------------------
+MÓDULO 2: AGENDA Y TURNOS (CALENDARIO)
+--------------------------------------------------------------------------------
+[ ] 2.1 Agendar un Turno con Dra. Marie (Azul):
+    - Hacer clic en un horario libre o en el botón "Agendar Turno".
+    - Seleccionar el paciente desde la lista.
+    - Seleccionar profesional: "Dra. Marie" (100% honorario).
+    - Elegir motivo (ej: "Limpieza", "Restauración caries", etc.).
+    - Verificar que el horario de fin se calcule automáticamente 
+      (ej: 11:30 a 12:15 hs).
+    - Guardar y verificar que aparezca en el calendario con color azul.
+
+[ ] 2.2 Agendar un Turno con Dra. Yani (Verde):
+    - Repetir el proceso seleccionando a "Dra. Yani" (100% honorario).
+    - Verificar que la tarjeta del turno se muestre con el distintivo verde.
+
+[ ] 2.3 Agendar un Turno con "Las dos juntas (Marie y Yani)" (Violeta):
+    - Agendar un turno con tratamiento especial (ej: "Especiales TC + perno").
+    - Seleccionar "Las dos juntas (Marie y Yani)".
+    - Verificar que la tarjeta aparezca con el color violeta y la etiqueta
+      "Las dos juntas (Marie y Yani)".
+
+[ ] 2.4 Visualización y Filtros del Calendario:
+    - Alternar entre las vistas: Día, Semana y Mes.
+    - Probar los filtros por profesional en la barra superior:
+      * Clic en "Dra. Marie": Muestra solo los turnos de Marie y conjuntos.
+      * Clic en "Dra. Yani": Muestra solo los turnos de Yani y conjuntos.
+      * Clic en "Las dos juntas (Marie y Yani)": Muestra únicamente turnos compartidos.
+      * Clic en "(Ver todas)": Muestra la totalidad de los turnos.
+
+[ ] 2.5 Formato y Edición de Turnos:
+    - Verificar que el detalle del turno indique claramente:
+      * Motivo: [Tratamiento]
+      * Horario de atención: [Inicio] a [Fin] hs
+    - Marcar un turno como atendido con el botón de check circular.
+    - Editar fecha, hora o motivo de un turno existente.
+    - Enviar recordatorio por WhatsApp previo a la cita usando el botón directo.
+
+[ ] 2.6 Selector rápido de Paciente en Calendario:
+    - En la barra del calendario, usar el menú desplegable de pacientes para abrir 
+      directamente la Ficha Médica de cualquier paciente.
+
+--------------------------------------------------------------------------------
+MÓDULO 3: CARPETA DE OBRAS SOCIALES
+--------------------------------------------------------------------------------
+[ ] 3.1 Subir y Organizar Archivos:
+    - Abrir "Carpeta de Obras Sociales".
+    - Subir un archivo de aranceles o normas de facturación (PDF o Imagen).
+    - Asignarle un título descriptivo y la obra social correspondiente.
+    - Guardar el archivo.
+
+[ ] 3.2 Visor Integrado de Documentos:
+    - En la lista de archivos de la carpeta, hacer clic en "Abrir / Ver Archivo".
+    - Verificar que se abra en el visor de pantalla completa con barra superior verde.
+    - Probar el botón "Volver a la Carpeta" o la cruz para cerrar el visor.
+
+--------------------------------------------------------------------------------
+MÓDULO 4: RESUMEN FINANCIERO Y RENDICIÓN DE HONORARIOS
+--------------------------------------------------------------------------------
+[ ] 4.1 Cálculo de Honorarios Individuales y Compartidos:
+    - Abrir la sección de "Caja / Resumen Financiero".
+    - Verificar que los turnos atendidos por la Dra. Marie sumen al 100% a su cuenta.
+    - Verificar que los turnos atendidos por la Dra. Yani sumen al 100% a su cuenta.
+    - Verificar que los turnos de "Las dos juntas (Marie y Yani)" se dividan 
+      automáticamente en un 50% para Marie y 50% para Yani.
+    - Filtrar por mes o período personalizado y constatar los totales.
+
+--------------------------------------------------------------------------------
+MÓDULO 5: COPIAS DE SEGURIDAD Y RESPALDO (SEGURIDAD DE DATOS)
+--------------------------------------------------------------------------------
+[ ] 5.1 Exportar Copia de Seguridad:
+    - Hacer clic en "Copia de Seguridad" -> "Exportar Datos / Backup".
+    - Verificar que se descargue un archivo `.json` con la fecha actual.
+    - Guardar este archivo en un lugar seguro (Drive, pendrive o email).
+
+[ ] 5.2 Restaurar / Importar Copia de Seguridad:
+    - Probar la opción de "Importar Copia de Seguridad" seleccionando el archivo.
+    - Constatar que todos los pacientes, turnos e historiales se mantengan íntegros.
+
+================================================================================
+¡LISTO PARA PASAR A PRODUCCIÓN!
+================================================================================
+Una vez completados todos los casilleros de verificación [x], la agenda se
+encuentra 100% calibrada y lista para el trabajo diario en el consultorio.
+================================================================================
