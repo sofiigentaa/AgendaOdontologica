@@ -153,31 +153,6 @@ export default function App() {
   const [isScheduleContactLocked, setIsScheduleContactLocked] = useState(false);
   const [targetCalendarDate, setTargetCalendarDate] = useState<string | null>(null);
 
-  // Check if this is a patient accessing a 1-click confirmation / cancellation link
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const patientConfirmId = urlParams?.get('confirm_id') || urlParams?.get('turno');
-  const patientAction = (urlParams?.get('action') as 'confirm' | 'cancel') || (urlParams?.has('cancelar') ? 'cancel' : 'confirm');
-
-  // Authentication gate for dental team
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('auth_session_token') === 'active';
-  });
-
-  if (patientConfirmId) {
-    return <PatientConfirmationView appointmentId={patientConfirmId} initialAction={patientAction} />;
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <AuthModal 
-        onLoginSuccess={() => {
-          setIsAuthenticated(true);
-        }} 
-      />
-    );
-  }
-
   // Helper to merge incoming appointments without accidentally overwriting recent confirmed/cancelled status
   const mergeAppointmentsWithState = (incomingAppts: Appointment[], prevAppts: Appointment[]): Appointment[] => {
     const currentMap = new Map<string, Appointment>();
@@ -202,6 +177,17 @@ export default function App() {
   // Toast state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
+
+  // Authentication gate for dental team
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('auth_session_token') === 'active';
+  });
+
+  // Check if this is a patient accessing a 1-click confirmation / cancellation link
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const patientConfirmId = urlParams?.get('confirm_id') || urlParams?.get('turno');
+  const patientAction = (urlParams?.get('action') as 'confirm' | 'cancel') || (urlParams?.has('cancelar') ? 'cancel' : 'confirm');
 
   // Manual & automatic bi-directional sync function
   const handleManualSync = async () => {
@@ -1233,6 +1219,20 @@ export default function App() {
       document.getElementById('ai-assistant-section')?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
   };
+
+  if (patientConfirmId) {
+    return <PatientConfirmationView appointmentId={patientConfirmId} initialAction={patientAction} />;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <AuthModal 
+        onLoginSuccess={() => {
+          setIsAuthenticated(true);
+        }} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] text-[#333333] font-sans flex flex-col w-full max-w-full overflow-x-clip">

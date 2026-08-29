@@ -17,48 +17,17 @@ INITIAL_CONTACTS.forEach((c) => initialContactsMap.set(c.id, c));
 export function getStoredContacts(): Contact[] {
   try {
     const raw = localStorage.getItem(CONTACTS_KEY);
-    let contacts: Contact[] = [];
     if (!raw) {
-      // Check legacy keys
-      const legacy = localStorage.getItem('mi_agenda_contacts_v3') || localStorage.getItem('mi_agenda_contacts');
-      if (legacy) {
-        try { contacts = JSON.parse(legacy); } catch {}
-      }
-      if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
-        contacts = INITIAL_CONTACTS;
-      }
-    } else {
-      contacts = JSON.parse(raw);
+      return [];
     }
-
-    if (!Array.isArray(contacts) || contacts.length === 0) {
-      contacts = INITIAL_CONTACTS;
+    const contacts: Contact[] = JSON.parse(raw);
+    if (!Array.isArray(contacts)) {
+      return [];
     }
-
-    // Auto-repair any contact with missing/empty fullName
-    contacts = contacts.map((c) => {
-      if (!c.fullName || c.fullName.trim() === '') {
-        const fallback = initialContactsMap.get(c.id);
-        if (fallback) {
-          return {
-            ...fallback,
-            ...c,
-            fullName: fallback.fullName,
-            primaryPhone: c.primaryPhone || fallback.primaryPhone,
-            insuranceName: c.insuranceName || fallback.insuranceName,
-            isParticular: c.isParticular ?? fallback.isParticular,
-            avatarColor: c.avatarColor || fallback.avatarColor,
-          };
-        }
-      }
-      return c;
-    });
-
-    localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
     return contacts;
   } catch (e) {
     console.error('Error reading contacts', e);
-    return INITIAL_CONTACTS;
+    return [];
   }
 }
 
@@ -76,13 +45,12 @@ export function getStoredReminders(): CallReminder[] {
   try {
     const raw = localStorage.getItem(REMINDERS_KEY);
     if (!raw) {
-      localStorage.setItem(REMINDERS_KEY, JSON.stringify(INITIAL_REMINDERS));
-      return INITIAL_REMINDERS;
+      return [];
     }
     return JSON.parse(raw);
   } catch (e) {
     console.error('Error reading reminders', e);
-    return INITIAL_REMINDERS;
+    return [];
   }
 }
 
@@ -100,13 +68,12 @@ export function getStoredNotes(): ContactNote[] {
   try {
     const raw = localStorage.getItem(NOTES_KEY);
     if (!raw) {
-      localStorage.setItem(NOTES_KEY, JSON.stringify(INITIAL_NOTES));
-      return INITIAL_NOTES;
+      return [];
     }
     return JSON.parse(raw);
   } catch (e) {
     console.error('Error reading notes', e);
-    return INITIAL_NOTES;
+    return [];
   }
 }
 
@@ -124,13 +91,12 @@ export function getStoredAttachments(): ContactAttachment[] {
   try {
     const raw = localStorage.getItem(ATTACHMENTS_KEY);
     if (!raw) {
-      localStorage.setItem(ATTACHMENTS_KEY, JSON.stringify(INITIAL_ATTACHMENTS));
-      return INITIAL_ATTACHMENTS;
+      return [];
     }
     return JSON.parse(raw);
   } catch (e) {
     console.error('Error reading attachments', e);
-    return INITIAL_ATTACHMENTS;
+    return [];
   }
 }
 
@@ -146,29 +112,18 @@ export function saveStoredAttachments(attachments: ContactAttachment[]): void {
 // Appointments
 export function getStoredAppointments(): Appointment[] {
   try {
-    let appointments: Appointment[] = [];
     const raw = localStorage.getItem(APPOINTMENTS_KEY);
     if (!raw) {
-      const legacy = localStorage.getItem('mi_agenda_appointments_v3') || localStorage.getItem('mi_agenda_appointments');
-      if (legacy) {
-        try { appointments = JSON.parse(legacy); } catch {}
-      }
-      if (!appointments || !Array.isArray(appointments) || appointments.length === 0) {
-        appointments = INITIAL_APPOINTMENTS;
-      }
-    } else {
-      appointments = JSON.parse(raw);
+      return [];
     }
-
-    if (!Array.isArray(appointments) || appointments.length === 0) {
-      appointments = INITIAL_APPOINTMENTS;
+    const appointments = JSON.parse(raw);
+    if (!Array.isArray(appointments)) {
+      return [];
     }
-
-    localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
     return appointments;
   } catch (e) {
     console.error('Error reading appointments', e);
-    return INITIAL_APPOINTMENTS;
+    return [];
   }
 }
 
