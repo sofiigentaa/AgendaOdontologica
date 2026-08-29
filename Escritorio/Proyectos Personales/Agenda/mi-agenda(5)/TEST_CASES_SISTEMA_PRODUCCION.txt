@@ -1,0 +1,328 @@
+================================================================================
+CASOS DE PRUEBA INTEGRALES PARA PASO A PRODUCCION (QA TEST CASES)
+Sistema: Consultorio Odontológico Marie - Yani
+Fecha: Agosto 2026
+Estado: APROBADO / LISTO PARA PRODUCCIÓN
+================================================================================
+
+INDICE DE MODULOS:
+1. MODULO 1: GESTION DE PACIENTES Y CONTACTOS
+2. MODULO 2: BUSCADOR RAPIDO PREDICTIVO Y AUTOCOMPLETADO
+3. MODULO 3: FICHA MEDICA, HISTORIA CLINICA Y RECORDATORIOS
+4. MODULO 4: CALENDARIO, TURNOS Y ASIGNACION DE ODONTOLOGA
+5. MODULO 5: BARRA DE NAVEGACION, SALTO DE FECHA Y ESTABILIDAD FIJA
+6. MODULO 6: EDICION Y BLOQUEO SEGURO DE PACIENTE EN TURNOS
+7. MODULO 7: FINANZAS, COBROS Y LIQUIDACIONES DIARIAS (MARIE / YANI)
+8. MODULO 8: CARPETA DE OBRAS SOCIALES Y NOMENCLADORES PDF
+9. MODULO 9: COPIAS DE SEGURIDAD (EXPORTAR / IMPORTAR JSON) Y RESPALDO
+
+--------------------------------------------------------------------------------
+MODULO 1: GESTION DE PACIENTES Y CONTACTOS
+--------------------------------------------------------------------------------
+[TC-PAC-01] Alta de Paciente Particular
+- Pasos:
+  1. Click en '+ Nuevo Contacto' o '+ Nuevo Paciente'.
+  2. Ingresar Nombre Completo y Telefono.
+  3. Marcar opcion 'Atencion Particular'.
+  4. Guardar.
+- Resultado Esperado: El paciente se guarda y aparece en la lista con distintivo verde de Particular.
+- Estado: PASADO [OK]
+
+[TC-PAC-02] Alta de Paciente con Prepaga / Obra Social
+- Pasos:
+  1. Abrir modal de nuevo paciente.
+  2. Desmarcar Particular.
+  3. Seleccionar Obra Social (ej: OSDE, Swiss Medical) e ingresar N° de Afiliado.
+  4. Guardar.
+- Resultado Esperado: El paciente se registra con su prepaga y numero de afiliado visible.
+- Estado: PASADO [OK]
+
+[TC-PAC-03] Modificacion de Datos de Paciente
+- Pasos:
+  1. En la tarjeta de un paciente, presionar boton Editar.
+  2. Cambiar numero de telefono o direccion.
+  3. Guardar cambios.
+- Resultado Esperado: Los datos se actualizan instantaneamente en la interfaz y en localStorage.
+- Estado: PASADO [OK]
+
+[TC-PAC-04] Eliminacion de Paciente con Confirmacion
+- Pasos:
+  1. Presionar icono de eliminar en un paciente.
+  2. Confirmar la accion en el dialogo de seguridad.
+- Resultado Esperado: El paciente es eliminado y se actualiza el contador total de contactos.
+- Estado: PASADO [OK]
+
+[TC-PAC-05] Filtros de la Barra Superior
+- Pasos:
+  1. Marcar pacientes con estrella.
+  2. Presionar filtro 'Favoritos'.
+  3. Seleccionar una prepaga en el desplegable de filtro.
+- Resultado Esperado: La vista filtra unicamente los pacientes que cumplen con las condiciones elegidas.
+- Estado: PASADO [OK]
+
+--------------------------------------------------------------------------------
+MODULO 2: BUSCADOR RAPIDO PREDICTIVO Y AUTOCOMPLETADO
+--------------------------------------------------------------------------------
+[TC-BUS-01] Busqueda Predictiva por Nombre en Calendario
+- Pasos:
+  1. En la barra superior del Calendario, comenzar a escribir las primeras letras de un paciente.
+- Resultado Esperado: Se despliega lista flotante en tiempo real con sugerencias coincidentes.
+- Estado: PASADO [OK]
+
+[TC-BUS-02] Seleccion desde Sugerencias de Autocompletado
+- Pasos:
+  1. Escribir nombre o navegar con flechas arriba/abajo.
+  2. Presionar Enter o click sobre el paciente.
+- Resultado Esperado: Se abre inmediatamente la Ficha Medica Personal del paciente seleccionado.
+- Estado: PASADO [OK]
+
+[TC-BUS-03] Despliegue de Lista Completa al hacer click
+- Pasos:
+  1. Con la barra vacia, hacer click en el campo de texto o flecha.
+- Resultado Esperado: Se visualiza el listado alfabetico completo con sus badges de Particular / Prepaga.
+- Estado: PASADO [OK]
+
+[TC-BUS-04] Buscador Predictivo en Pestana 'Contactos'
+- Pasos:
+  1. Ir a la pestana Contactos.
+  2. Utilizar la barra de busqueda superior para escribir o elegir un paciente.
+- Resultado Esperado: Permite seleccionar cualquier paciente directamente para abrir su ficha medica.
+- Estado: PASADO [OK]
+
+[TC-BUS-05] Busqueda Predictiva en Modal de Agendar Turno
+- Pasos:
+  1. Abrir modal 'Agendar Turno'.
+  2. En el campo 'Seleccionar Paciente', escribir parte del nombre.
+- Resultado Esperado: Se listan las coincidencias con datos de prepaga, numero de afiliado y telefono.
+- Estado: PASADO [OK]
+
+--------------------------------------------------------------------------------
+MODULO 3: FICHA MEDICA, HISTORIA CLINICA Y RECORDATORIOS
+--------------------------------------------------------------------------------
+[TC-FIC-01] Historial Cronologico de Turnos
+- Pasos:
+  1. Abrir la ficha medica de un paciente con turnos previos o futuros.
+- Resultado Esperado: Se visualiza el listado ordenado con fecha, hora, odontologa y motivo de consulta.
+- Estado: PASADO [OK]
+
+[TC-FIC-02] Agregar Notas y Observaciones Clinicas
+- Pasos:
+  1. En la pestana de Notas de la ficha, escribir una observacion medica.
+  2. Elegir color de nota y presionar Guardar.
+- Resultado Esperado: La nota queda guardada con fecha, hora y color seleccionado.
+- Estado: PASADO [OK]
+
+[TC-FIC-03] Carga de Archivos Adjuntos (Radiografias / Estudios)
+- Pasos:
+  1. Subir imagen o archivo PDF (radiografia periapical / panoramica).
+  2. Probar visualizacion previa y descarga.
+- Resultado Esperado: El archivo se almacena y se puede previsualizar o descargar correctamente.
+- Estado: PASADO [OK]
+
+[TC-FIC-04] Recordatorios con Edicion Inline
+- Pasos:
+  1. Programar un recordatorio con fecha y hora en la ficha.
+  2. Presionar el lapiz en el recordatorio para modificar fecha, hora o texto.
+  3. Guardar cambios.
+  4. Marcar como completado una vez realizado.
+- Resultado Esperado: El recordatorio se actualiza en tiempo real, mantiene sincronizacion con la campana de notificaciones.
+- Estado: PASADO [OK]
+
+[TC-FIC-05] Edicion Directa de Turno desde la Ficha Medica
+- Pasos:
+  1. En la pestana 'Turnos' de la ficha medica del paciente, presionar el boton 'Editar' en cualquier turno del historial.
+  2. Modificar fecha, hora, duracion, motivo o montos.
+  3. Guardar cambios.
+- Resultado Esperado: Se abre el modal de edicion con el paciente bloqueado, se aplican los cambios y se actualiza de inmediato el historial y el calendario.
+- Estado: PASADO [OK]
+
+--------------------------------------------------------------------------------
+MODULO 4: CALENDARIO, TURNOS Y ASIGNACION DE ODONTOLOGA
+--------------------------------------------------------------------------------
+[TC-CAL-01] Agendar Nuevo Turno
+- Pasos:
+  1. Click en 'Agendar Turno'.
+  2. Seleccionar paciente, fecha, horario de inicio y duracion (ej. 45 min).
+  3. Asignar Odontologa (Marie, Yani o Ambas).
+  4. Guardar turno.
+- Resultado Esperado: El turno se posiciona en el dia y horario correcto en el calendario.
+- Estado: PASADO [OK]
+
+[TC-CAL-02] Alternar Vista Mes vs. Lista de Turnos
+- Pasos:
+  1. En el encabezado del calendario, hacer click en 'Vista Mes' y luego en 'Lista de Turnos'.
+- Resultado Esperado: La vista cambia fluidamente entre la cuadricula mensual y el listado detallado.
+- Estado: PASADO [OK]
+
+[TC-CAL-03] Filtro por Odontologa Limpio
+- Pasos:
+  1. En la fila inferior de filtros, hacer click en 'Dra. Marie', 'Dra. Yani' o 'Las dos juntas'.
+  2. Volver a hacer click en el boton activo para desmarcarlo.
+- Resultado Esperado: El filtro se aplica al instante; al desmarcar se muestran todos los turnos.
+- Estado: PASADO [OK]
+
+[TC-CAL-04] Comportamiento Sticky de Filtros y Cabecera del Calendario
+- Pasos:
+  1. Desplazarse hacia abajo (scroll) a lo largo del calendario o lista de turnos.
+- Resultado Esperado: La barra superior de filtros y la barra verde del mes permanecen fijadas arriba.
+- Estado: PASADO [OK]
+
+[TC-CAL-05] Marcar Turno como Atendido / Desmarcar
+- Pasos:
+  1. En un turno del dia, presionar el boton de verificacion.
+  2. Volver a presionar para desmarcar.
+- Resultado Esperado: El estado pasa de pendiente a atendido y viceversa, actualizando los reportes.
+- Estado: PASADO [OK]
+
+[TC-CAL-06] Formato Legible de Duraciones (Horas y Minutos)
+- Pasos:
+  1. Visualizar turnos con duracion mayor o igual a 60 minutos (ej. 75 min, 100 min, 120 min).
+- Resultado Esperado: Se muestran formateados de manera clara (ej. 1 h 15 min, 1 h 40 min, 2 h).
+- Estado: PASADO [OK]
+
+--------------------------------------------------------------------------------
+MODULO 5: BARRA DE NAVEGACION, SALTO DE FECHA Y ESTABILIDAD FIJA
+--------------------------------------------------------------------------------
+[TC-NAV-01] Boton 'Ir a Hoy' sin Desplazamiento Vertical
+- Pasos:
+  1. En la barra verde del calendario, pulsar el boton 'Ir a Hoy'.
+- Resultado Esperado: El calendario viaja al mes en curso y resalta la celda de hoy. La pantalla y la barra verde permanecen 100% fijas sin desplazarse hacia abajo.
+- Estado: PASADO [OK]
+
+[TC-NAV-02] Aviso Flotante de Dia sin Turnos sin Alterar la Barra
+- Pasos:
+  1. Presionar 'Ir a Hoy' o buscar un dia que no tenga turnos agendados.
+- Resultado Esperado: Se despliega el pop-up emergente 'No hay turnos asignados...' con boton '+' para agendar y boton 'X'. La barra superior mantiene su altura fija.
+- Estado: PASADO [OK]
+
+[TC-NAV-03] Navegacion con Flechas '<' y '>' entre Meses
+- Pasos:
+  1. Hacer click repetidamente en las flechas '<' y '>' para cambiar de mes (incluyendo Agosto).
+- Resultado Esperado: La transicion es inmediata, la barra verde mantiene su ancho y altura estables y no se desplaza hacia abajo.
+- Estado: PASADO [OK]
+
+[TC-NAV-04] Salto de Fecha por Calendario Nativo
+- Pasos:
+  1. En 'Elegir en calendario', seleccionar una fecha especifica y presionar 'IR'.
+- Resultado Esperado: Enfoca el mes y dia seleccionado, manteniendo la barra fija.
+- Estado: PASADO [OK]
+
+[TC-NAV-05] Salto de Fecha por Texto Directo
+- Pasos:
+  1. En 'Escribir dia', tipear '16/08', '16-8' o '16/08/2026' y presionar 'IR'.
+- Resultado Esperado: Valida y salta al dia correspondiente.
+- Estado: PASADO [OK]
+
+[TC-NAV-06] Boton de Limpiar Fecha y Texto ('X')
+- Pasos:
+  1. Ingresar una fecha en el calendario o texto.
+  2. Presionar el boton 'X' o pulsar 'Limpiar' en el selector nativo.
+- Resultado Esperado: El campo se vacia al instante y se limpian los avisos flotantes activos.
+- Estado: PASADO [OK]
+
+--------------------------------------------------------------------------------
+MODULO 6: EDICION Y BLOQUEO SEGURO DE PACIENTE EN TURNOS
+--------------------------------------------------------------------------------
+[TC-EDI-01] Paciente Bloqueado al Editar Turno
+- Pasos:
+  1. Abrir un turno existente y hacer click en 'Editar Turno'.
+- Resultado Esperado: La seccion del paciente se muestra en modo '1. Paciente Asignado', bloqueada sin selector desplegable.
+- Estado: PASADO [OK]
+
+[TC-EDI-02] Visualizacion Limpia de Cobertura (Una Sola Vez)
+- Pasos:
+  1. Verificar la tarjeta del paciente en el modal de edicion o agendado de turno.
+- Resultado Esperado: Muestra de forma centrada: Nombre, Telefono y distintivo de Cobertura una sola vez (Particular o Prepaga con su N° de Afiliado).
+- Estado: PASADO [OK]
+
+[TC-EDI-03] Modificacion de Horarios y Montos Financieros
+- Pasos:
+  1. En el modal de edicion de turno, modificar honorarios, descartables o materiales.
+  2. Guardar turno.
+- Resultado Esperado: Los valores economicos y el horario se actualizan sin alterar el paciente asignado.
+- Estado: PASADO [OK]
+
+--------------------------------------------------------------------------------
+MODULO 7: FINANZAS, COBROS Y LIQUIDACIONES DIARIAS (MARIE / YANI)
+--------------------------------------------------------------------------------
+[TC-FIN-01] Apertura de Modal Finanzas
+- Pasos:
+  1. En la cabecera principal, click en 'Finanzas y Liquidaciones'.
+- Resultado Esperado: Se abre el modal con resumen diario del dia actual y selector de fecha.
+- Estado: PASADO [OK]
+
+[TC-FIN-02] Visualizacion de Turnos del Dia (Todos / Atendidos / Pendientes)
+- Pasos:
+  1. Seleccionar una fecha con turnos pendientes.
+  2. Observar la lista de turnos y los filtros de estado.
+- Resultado Esperado: Se muestran inmediatamente todos los turnos programados, permitiendo verlos, marcarlos como atendidos o cargar montos.
+- Estado: PASADO [OK]
+
+[TC-FIN-03] Alternar Filtros de Estado en Cualquier Fecha
+- Pasos:
+  1. Presionar 'Todos', 'Atendidos' o 'Pendientes'.
+- Resultado Esperado: La lista se filtra en tiempo real.
+- Estado: PASADO [OK]
+
+[TC-FIN-04] Tarjetas de Resumen Consolidado
+- Pasos:
+  1. Verificar las 4 tarjetas superiores: Ingresos Cobrados, Egresos / Costos, Liquidacion Marie, Liquidacion Yani.
+- Resultado Esperado: Los calculos matematicos respetan porcentajes de honorarios y deduccion de descartables/materiales.
+- Estado: PASADO [OK]
+
+[TC-FIN-05] Boton Unico de 'Generar Liquidacion Diaria'
+- Pasos:
+  1. Verificar la posicion del boton de generacion de liquidacion.
+- Resultado Esperado: Ubicado exclusivamente en el pie del modal como accion principal de cierre de jornada.
+- Estado: PASADO [OK]
+
+--------------------------------------------------------------------------------
+MODULO 8: CARPETA DE OBRAS SOCIALES Y NOMENCLADORES PDF
+--------------------------------------------------------------------------------
+[TC-OBR-01] Explorar Prestadoras Medicas
+- Pasos:
+  1. Click en 'Carpeta Obras Sociales'.
+  2. Seleccionar OSDE, Swiss Medical, Galeno, PAMI, etc.
+- Resultado Esperado: Muestra la seccion organizada por prestadora con informacion y archivos.
+- Estado: PASADO [OK]
+
+[TC-OBR-02] Adjuntar PDF de Aranceles o Nomenclador
+- Pasos:
+  1. Dentro de una obra social, presionar 'Subir Documento'.
+  2. Seleccionar archivo PDF o imagen.
+- Resultado Esperado: El archivo queda guardado en la carpeta de esa obra social y permite descarga directa.
+- Estado: PASADO [OK]
+
+--------------------------------------------------------------------------------
+MODULO 9: COPIAS DE SEGURIDAD (EXPORTAR / IMPORTAR JSON) Y RESPALDO
+--------------------------------------------------------------------------------
+[TC-BCK-01] Exportar Copia de Seguridad JSON
+- Pasos:
+  1. Click en el boton de Descarga en la cabecera superior.
+- Resultado Esperado: Se descarga un archivo .json completo con contactos, turnos, notas, archivos y recordatorios.
+- Estado: PASADO [OK]
+
+[TC-BCK-02] Importar Archivo de Respaldo
+- Pasos:
+  1. Click en el boton de Subir y elegir archivo .json previamente exportado.
+- Resultado Esperado: La aplicacion restaura integramente los datos y muestra notificacion de exito.
+- Estado: PASADO [OK]
+
+[TC-BCK-03] Restablecer / Comenzar desde Cero
+- Pasos:
+  1. Presionar icono de reinicio.
+  2. Elegir 'Vaciar toda la agenda' o 'Restablecer datos de prueba'.
+- Resultado Esperado: La agenda se reinicia segun la opcion elegida tras confirmar la advertencia.
+- Estado: PASADO [OK]
+
+================================================================================
+CHECKLIST FINAL DE FIRMA DE CALIDAD PARA PRODUCCION
+================================================================================
+[X] Estabilidad de Barra y Navegacion: 'Ir a Hoy', salto por fecha y flechas operan con posicion fija.
+[X] Aviso Flotante: El aviso de dia sin turnos se despliega sin deformar la cabecera verde.
+[X] Autocompletado Predictivo: Busqueda en tiempo real activa en Calendario y Contactos.
+[X] Ficha del Paciente y Seguridad: Datos claros de cobertura, telefono y N° de afiliado; paciente bloqueado al editar turnos.
+[X] Modulo de Finanzas: Calculos de liquidacion Marie/Yani y visualizacion de turnos pendientes/atendidos.
+[X] Copias de Seguridad: Exportacion e importacion JSON validadas.
+[X] Compilacion y Tipado: 0 errores de TypeScript y build en produccion exitoso.
+================================================================================
