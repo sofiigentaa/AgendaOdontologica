@@ -308,6 +308,19 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Direct Logout / Lock Button */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-1.5 bg-rose-600/80 hover:bg-rose-700 text-white px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 border border-rose-500/50"
+                title="Cerrar sesión del consultorio"
+              >
+                <Lock className="w-3.5 h-3.5 text-rose-100" />
+                <span className="hidden sm:inline">Cerrar Sesión</span>
+              </button>
+            )}
+
             {/* Consolidated Backup & Export Dropdown Menu */}
             <div className="relative shrink-0" ref={backupMenuRef}>
               <button
