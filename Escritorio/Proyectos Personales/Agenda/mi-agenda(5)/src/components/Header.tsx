@@ -19,7 +19,8 @@ import {
   FileText,
   ChevronDown,
   Trash2,
-  Database
+  Database,
+  Lock
 } from 'lucide-react';
 import { ViewMode, FilterType, MainTab } from '../types';
 

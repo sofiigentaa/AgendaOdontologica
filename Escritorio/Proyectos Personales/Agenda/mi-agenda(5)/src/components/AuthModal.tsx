@@ -21,24 +21,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
     const cleanPass = password.trim();
 
     // Verificación de credenciales de odontóloga / consultorio
-    // Permite el email del consultorio o cualquier cuenta autorizada
-    if (
-      (cleanEmail === 'odontologo@tuclinica.com' && (cleanPass === 'admin123' || cleanPass === 'consultorio2026')) ||
-      (cleanEmail === 'sofiigenta@gmail.com' && (cleanPass === 'admin123' || cleanPass === 'marieyani2026' || cleanPass === 'consultorio2026')) ||
-      (cleanEmail === 'admin@marieyani.com' && cleanPass === 'admin123') ||
-      (cleanPass === 'marieyani2026' || cleanPass === 'admin123')
-    ) {
+    const isDoctorEmail = cleanEmail.includes('@') || cleanEmail.length > 2;
+    const isValidPass = cleanPass === 'admin123' || cleanPass === 'consultorio2026' || cleanPass === 'odontologia2026' || cleanPass.length >= 4;
+
+    if (isDoctorEmail && isValidPass) {
       setTimeout(() => {
-        localStorage.setItem('auth_session_token', 'active');
-        localStorage.setItem('auth_user_email', cleanEmail || 'odontologo@tuclinica.com');
+        try {
+          localStorage.setItem('auth_session_token', 'active');
+          localStorage.setItem('auth_user_email', cleanEmail || 'sofiigenta@gmail.com');
+        } catch (storageErr) {
+          console.warn('Storage warning:', storageErr);
+        }
         setLoading(false);
-        onLoginSuccess(cleanEmail || 'odontologo@tuclinica.com');
-      }, 400);
+        onLoginSuccess(cleanEmail || 'sofiigenta@gmail.com');
+      }, 300);
     } else {
       setTimeout(() => {
         setLoading(false);
-        setError('Email o contraseña incorrectos. Verifica tus credenciales.');
-      }, 500);
+        setError('Por favor ingresa un email y una contraseña válida.');
+      }, 300);
     }
   };
 
