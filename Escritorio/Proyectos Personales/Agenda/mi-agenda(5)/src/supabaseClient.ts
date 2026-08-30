@@ -13,27 +13,36 @@ function sanitizeSupabaseUrl(url?: string): string {
   }
 }
 
+const DEFAULT_SUPABASE_URL = 'https://kkkhwhemraiyozqjsisl.supabase.co';
+const FALLBACK_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwiZXhwIjoyNTM0MDIzMDA4MDB9.placeholder_key';
+
 const rawUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
-export const SUPABASE_URL = sanitizeSupabaseUrl(rawUrl);
-export const SUPABASE_ANON_KEY = envKey || '';
+export const SUPABASE_URL = sanitizeSupabaseUrl(rawUrl || DEFAULT_SUPABASE_URL);
+export const SUPABASE_ANON_KEY = envKey || FALLBACK_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(
+  envKey &&
+  envKey !== '' &&
+  envKey !== FALLBACK_ANON_KEY &&
   SUPABASE_URL &&
-  SUPABASE_ANON_KEY &&
-  SUPABASE_URL.startsWith('https://') &&
   !SUPABASE_URL.includes('placeholder')
 );
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
+// Safe createClient that will never crash the React runtime
+export const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
     },
-  },
-});
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+  }
+);
