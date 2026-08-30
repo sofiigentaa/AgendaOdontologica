@@ -16,6 +16,7 @@ import { Appointment, Contact } from '../types';
 import { TREATMENT_PRESETS } from '../constants/treatments';
 import { formatDuration, getTodayISO, formatDateDDMMYYYY } from '../utils/time';
 import { PatientSearchSelect } from './PatientSearchSelect';
+import { CustomTimePicker } from './CustomTimePicker';
 
 interface ScheduleAppointmentModalProps {
   isOpen: boolean;
@@ -499,17 +500,14 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                 />
               </div>
 
-              {/* Column 2: Horario */}
+              {/* Column 2: Horario (Formato 24 Horas) */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  4. Horario *
+                  4. Horario (24 hs) *
                 </label>
-                <input
-                  type="time"
+                <CustomTimePicker
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  className="w-full h-11 px-2.5 sm:px-3 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 font-bold focus:ring-2 focus:ring-[#2E7D5E] focus:bg-white focus:outline-none transition-all shadow-2xs font-mono"
-                  required
+                  onChange={(newTime) => setTime(newTime)}
                 />
               </div>
             </div>
