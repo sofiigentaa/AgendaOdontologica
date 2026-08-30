@@ -1,0 +1,16 @@
+{
+  "short_name": "Consultorio",
+  "name": "Consultorio Marie - Yani | Agenda",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512 any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#2E7D5E",
+  "theme_color": "#2E7D5E",
+  "display": "standalone",
+  "orientation": "portrait"
+}

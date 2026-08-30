@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "AgendaMain": {
+      "title": "AgendaMain",
+      "description": "Shared real-time multi-device agenda state including appointments, contacts, reminders, and notes",
+      "type": "object",
+      "properties": {
+        "contacts": { "type": "array" },
+        "appointments": { "type": "array" },
+        "reminders": { "type": "array" },
+        "notes": { "type": "array" },
+        "lastUpdated": { "type": "string" },
+        "sourceDevice": { "type": "string" }
+      }
+    },
+    "InsuranceFile": {
+      "title": "InsuranceFile",
+      "description": "Insurance documentation file or tariff sheet stored for medical and dental health insurances",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "insuranceName": { "type": "string" },
+        "title": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "fileType": { "type": "string" },
+        "dataUrl": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "isChunked": { "type": "boolean" },
+        "chunkCount": { "type": "number" },
+        "sourceDevice": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "fileName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/agenda_data/shared_main": {
+      "schema": "AgendaMain",
+      "description": "Main shared agenda state document"
+    },
+    "/agenda_insurance_files/{fileId}": {
+      "schema": "InsuranceFile",
+      "description": "Insurance file documents and chunks"
+    }
+  }
+}
