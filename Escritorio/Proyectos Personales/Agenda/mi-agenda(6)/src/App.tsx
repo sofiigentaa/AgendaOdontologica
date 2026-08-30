@@ -492,7 +492,9 @@ export default function App() {
         showToast(`Conectado a Google con éxito: ${res.user.email}`);
       }
     } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
+      if (err.code === 'auth/unauthorized-domain') {
+        showToast('⚠️ Dominio no autorizado en Firebase. Agrega tu dominio en Firebase Console > Authentication > Authorized domains.');
+      } else if (err.code !== 'auth/popup-closed-by-user') {
         showToast(`Error al conectar Google: ${err.message || 'Intente nuevamente'}`);
       }
     } finally {

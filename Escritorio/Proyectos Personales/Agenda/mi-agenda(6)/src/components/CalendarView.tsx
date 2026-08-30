@@ -1857,22 +1857,24 @@ ${cancelUrl}
                     </button>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onToggleAppointmentComplete(selectedApptDetail.id);
-                          setSelectedApptDetail(null);
-                        }}
-                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">
-                          {selectedApptDetail.completed ? 'Marcar Pendiente' : 'Marcar Atendido'}
-                        </span>
-                        <span className="sm:hidden">
-                          {selectedApptDetail.completed ? 'Pendiente' : 'Atendido'}
-                        </span>
-                      </button>
+                      {selectedApptDetail.whatsappStatus !== 'cancelled' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onToggleAppointmentComplete(selectedApptDetail.id);
+                            setSelectedApptDetail(null);
+                          }}
+                          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span className="hidden sm:inline">
+                            {selectedApptDetail.completed ? 'Marcar Pendiente' : 'Marcar Atendido'}
+                          </span>
+                          <span className="sm:hidden">
+                            {selectedApptDetail.completed ? 'Pendiente' : 'Atendido'}
+                          </span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
