@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { db, schema, isDbConfigured } from './src/db/index.ts';
@@ -7,6 +8,7 @@ import { eq, sql } from 'drizzle-orm';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const DATA_FILE_PATH = path.join(process.cwd(), 'agenda_storage.json');
 
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
@@ -24,6 +26,45 @@ let sharedAgendaStore: {
 } = {};
 
 const sharedInsuranceFilesMap = new Map<string, any>();
+
+function saveToDiskBackup() {
+  try {
+    const insuranceFiles = Array.from(sharedInsuranceFilesMap.values());
+    const dataToSave = {
+      ...sharedAgendaStore,
+      insuranceFiles: insuranceFiles.length > 0 ? insuranceFiles : (sharedAgendaStore.insuranceFiles || []),
+    };
+    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(dataToSave), 'utf-8');
+  } catch (err: any) {
+    console.warn('Could not write disk backup:', err?.message);
+  }
+}
+
+function loadFromDiskBackup() {
+  try {
+    if (fs.existsSync(DATA_FILE_PATH)) {
+      const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        sharedAgendaStore = {
+          ...parsed,
+          lastUpdated: parsed.lastUpdated || new Date().toISOString(),
+          sourceDevice: 'disk_restore',
+        };
+        if (Array.isArray(parsed.insuranceFiles)) {
+          for (const f of parsed.insuranceFiles) {
+            if (f && f.id) {
+              sharedInsuranceFilesMap.set(f.id, f);
+            }
+          }
+        }
+        console.log(`[Storage] Loaded ${sharedAgendaStore.contacts?.length || 0} contacts and ${sharedAgendaStore.appointments?.length || 0} appointments from disk.`);
+      }
+    }
+  } catch (err: any) {
+    console.warn('Could not read disk backup:', err?.message);
+  }
+}
 
 // Auto-create tables if running on a fresh PostgreSQL/Supabase database
 async function ensureTablesExist() {
@@ -411,7 +452,8 @@ app.post('/api/sync/agenda', (req, res) => {
       timestamp: sharedAgendaStore.lastUpdated,
     });
 
-    // Save to PostgreSQL in background
+    // Save to disk backup and cloud in background
+    saveToDiskBackup();
     persistToCloudSql(payload).catch(() => {});
 
     res.json({ success: true, lastUpdated: sharedAgendaStore.lastUpdated });
@@ -506,6 +548,8 @@ app.post('/api/db/clear', async (req, res) => {
     if (isDbConfigured) {
       if (target === 'appointments_only') {
         await db.delete(schema.appointments);
+      } else if (target === 'reminders_only') {
+        await db.delete(schema.callReminders);
       } else {
         await db.delete(schema.appointments);
         await db.delete(schema.callReminders);
@@ -518,6 +562,8 @@ app.post('/api/db/clear', async (req, res) => {
 
     if (target === 'appointments_only') {
       sharedAgendaStore.appointments = [];
+    } else if (target === 'reminders_only') {
+      sharedAgendaStore.reminders = [];
     } else {
       sharedInsuranceFilesMap.clear();
       sharedAgendaStore = {
@@ -1079,6 +1125,7 @@ ${contextText}`;
 });
 
 async function startServer() {
+  loadFromDiskBackup();
   await initStoreFromDatabase();
 
   if (process.env.NODE_ENV !== 'production') {

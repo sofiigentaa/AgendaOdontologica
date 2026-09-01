@@ -16,7 +16,6 @@ import {
   Share2
 } from 'lucide-react';
 import { InsuranceFolderFile } from '../types';
-import { OBRAS_SOCIALES_LIST } from '../constants/insurances';
 
 interface InsuranceFolderModalProps {
   isOpen: boolean;
@@ -82,7 +81,6 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
 
   // Form states for file upload
-  const [selectedInsurance, setSelectedInsurance] = useState('General');
   const [fileTitle, setFileTitle] = useState('');
   const [fileNotes, setFileNotes] = useState('');
   const [selectedFileData, setSelectedFileData] = useState<{
@@ -113,7 +111,6 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
     setSelectedFileData(null);
     setFileTitle('');
     setFileNotes('');
-    setSelectedInsurance('General');
     setErrorMessage(null);
     setIsReadingFile(false);
     setReadingProgressText('');
@@ -217,7 +214,7 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
     }
 
     onAddFile({
-      insuranceName: selectedInsurance || 'General',
+      insuranceName: 'General',
       title: fileTitle.trim() || selectedFileData.fileName,
       fileName: selectedFileData.fileName,
       fileSize: selectedFileData.fileSize,
@@ -367,13 +364,13 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2 truncate">
-                <span>Carpeta de Obras Sociales</span>
+                <span>Archivos y Documentos</span>
                 <span className="text-[11px] sm:text-xs bg-white/20 text-white font-semibold px-2 py-0.5 rounded-full border border-white/30 shrink-0">
                   {safeFiles.length} {safeFiles.length === 1 ? 'archivo' : 'archivos'}
                 </span>
               </h2>
               <p className="text-[11px] sm:text-xs text-emerald-100 truncate">
-                Nomencladores, planillas de aranceles y normativas por obra social
+                Documentos, fotos, planillas y archivos adjuntos del consultorio
               </p>
             </div>
           </div>
@@ -388,8 +385,7 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
                 className="px-3 py-1.5 bg-white text-[#2E7D5E] hover:bg-emerald-50 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 min-h-[36px]"
               >
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Adjuntar Archivo</span>
-                <span className="sm:hidden">Adjuntar</span>
+                <span>Adjuntar Archivo</span>
               </button>
             )}
             <button
@@ -412,7 +408,7 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
               <div className="flex items-center justify-between border-b border-emerald-200 pb-2">
                 <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
                   <Upload className="w-4 h-4 text-[#2E7D5E]" />
-                  Adjuntar Nuevo Archivo a la Carpeta
+                  Adjuntar Archivo
                 </h3>
                 {safeFiles.length > 0 && (
                   <button
@@ -512,52 +508,33 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
               </div>
 
               {/* File Meta Inputs */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
+              <div className="space-y-3 pt-1">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Obra Social o Categoría <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={selectedInsurance}
-                    onChange={(e) => setSelectedInsurance(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-[#2E7D5E] font-medium"
-                    required
-                  >
-                    <option value="General">📂 General / Todas las Obras Sociales</option>
-                    {OBRAS_SOCIALES_LIST.map((os) => (
-                      <option key={os} value={os}>
-                        {os}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Título o Descripción Corta <span className="text-rose-500">*</span>
+                    Título o Descripción del Archivo <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={fileTitle}
                     onChange={(e) => setFileTitle(e.target.value)}
-                    placeholder="Ej: Nomenclador 2026, Aranceles OSDE, etc."
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-[#2E7D5E]"
+                    placeholder="Ej: Ficha de tratamiento, Planilla de precios, Radiografía..."
+                    className="w-full px-3.5 py-2.5 text-xs border border-slate-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-[#2E7D5E] font-medium"
                     required
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Notas u Observaciones del Documento (Opcional)
-                </label>
-                <input
-                  type="text"
-                  value={fileNotes}
-                  onChange={(e) => setFileNotes(e.target.value)}
-                  placeholder="Ej: Códigos de autorización válidos hasta fin de año..."
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-[#2E7D5E]"
-                />
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Notas u Observaciones del Archivo (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={fileNotes}
+                    onChange={(e) => setFileNotes(e.target.value)}
+                    placeholder="Ej: Observaciones, detalles o notas importantes..."
+                    className="w-full px-3.5 py-2.5 text-xs border border-slate-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-[#2E7D5E]"
+                  />
+                </div>
               </div>
 
               {/* Submit Buttons */}
@@ -584,7 +561,7 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  <span>Guardar y Adjuntar a la Carpeta</span>
+                  <span>Adjuntar Archivo</span>
                 </button>
               </div>
             </form>
@@ -595,9 +572,9 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
             <div className="p-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300 text-slate-500 space-y-3">
               <Folder className="w-12 h-12 text-slate-400 mx-auto" />
               <div className="space-y-1">
-                <h4 className="text-sm font-bold text-slate-800">No hay archivos en la Carpeta de Obras Sociales</h4>
+                <h4 className="text-sm font-bold text-slate-800">No hay archivos adjuntos</h4>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Sube nomencladores, normativas o tablas de aranceles para tenerlos siempre disponibles.
+                  Sube documentos, fotos, PDFs, recetas o planillas para tenerlos siempre disponibles.
                 </p>
               </div>
               <button
@@ -620,7 +597,7 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm('¿Seguro que deseas vaciar y eliminar todos los archivos de la carpeta de Obras Sociales?')) {
+                        if (window.confirm('¿Seguro que deseas vaciar y eliminar todos los archivos?')) {
                           onClearAllFiles();
                         }
                       }}
@@ -652,9 +629,6 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-md border border-emerald-200 truncate max-w-[160px]">
-                                  {f.insuranceName || 'General'}
-                                </span>
                                 <span className={`text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${getFileBadgeColor(f.fileName)}`}>
                                   {ext}
                                 </span>

@@ -11,6 +11,7 @@ interface ReminderListModalProps {
   onDeleteReminder: (reminderId: string) => void;
   onUpdateReminder?: (reminderId: string, data: { date: string; time: string; note?: string }) => void;
   onSelectContact: (contact: Contact) => void;
+  onClearAllReminders?: () => void;
   onShowToast: (msg: string) => void;
 }
 
@@ -23,6 +24,7 @@ export const ReminderListModal: React.FC<ReminderListModalProps> = ({
   onDeleteReminder,
   onUpdateReminder,
   onSelectContact,
+  onClearAllReminders,
   onShowToast,
 }) => {
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
@@ -91,12 +93,29 @@ export const ReminderListModal: React.FC<ReminderListModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {reminders.length > 0 && onClearAllReminders && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('¿Deseas eliminar todos los recordatorios de llamadas?')) {
+                    onClearAllReminders();
+                  }
+                }}
+                className="px-2.5 py-1 text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Eliminar todas las llamadas"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Vaciar Todas</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}

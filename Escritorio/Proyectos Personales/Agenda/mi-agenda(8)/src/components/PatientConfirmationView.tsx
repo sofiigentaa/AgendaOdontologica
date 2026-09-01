@@ -79,8 +79,8 @@ export const PatientConfirmationView: React.FC<PatientConfirmationViewProps> = (
         // 3. Fallback to localStorage if accessed on same device
         if (!apptData) {
           try {
-            const stored = localStorage.getItem('mi_agenda_appointments_v4');
-            const storedContacts = localStorage.getItem('mi_agenda_contacts_v4');
+            const stored = localStorage.getItem('mi_agenda_appointments_v6');
+            const storedContacts = localStorage.getItem('mi_agenda_contacts_v6');
             if (stored) {
               const apptsList = JSON.parse(stored);
               const found = apptsList.find((a: any) => a.id === appointmentId);
@@ -255,13 +255,13 @@ export const PatientConfirmationView: React.FC<PatientConfirmationViewProps> = (
 
     // 3. Update localStorage if exists on client
     try {
-      const stored = localStorage.getItem('mi_agenda_appointments_v4');
+      const stored = localStorage.getItem('mi_agenda_appointments_v6');
       if (stored) {
         let appts = JSON.parse(stored);
         appts = appts.map((a: any) =>
           a.id === appointmentId ? { ...a, whatsappStatus: targetStatus, whatsappLastReply: nowIso } : a
         );
-        localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(appts));
+        localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(appts));
       }
     } catch {}
 

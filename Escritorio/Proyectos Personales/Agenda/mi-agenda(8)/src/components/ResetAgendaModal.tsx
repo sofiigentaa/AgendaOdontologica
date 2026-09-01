@@ -4,6 +4,7 @@ import {
   Trash2, 
   RotateCcw, 
   Calendar, 
+  Bell,
   AlertTriangle, 
   CheckCircle2, 
   ShieldAlert, 
@@ -16,9 +17,10 @@ interface ResetAgendaModalProps {
   onClose: () => void;
   onClearAll: () => void;
   onClearAppointmentsOnly: () => void;
-  onResetSampleData: () => void;
+  onClearRemindersOnly?: () => void;
   contactsCount: number;
   appointmentsCount: number;
+  remindersCount?: number;
 }
 
 export const ResetAgendaModal: React.FC<ResetAgendaModalProps> = ({
@@ -26,11 +28,12 @@ export const ResetAgendaModal: React.FC<ResetAgendaModalProps> = ({
   onClose,
   onClearAll,
   onClearAppointmentsOnly,
-  onResetSampleData,
+  onClearRemindersOnly,
   contactsCount,
   appointmentsCount,
+  remindersCount = 0,
 }) => {
-  const [selectedAction, setSelectedAction] = useState<'clear_all' | 'clear_appts' | 'sample' | null>(null);
+  const [selectedAction, setSelectedAction] = useState<'clear_all' | 'clear_appts' | 'clear_reminders' | null>(null);
   const [confirmInput, setConfirmInput] = useState('');
 
   if (!isOpen) return null;
@@ -46,8 +49,10 @@ export const ResetAgendaModal: React.FC<ResetAgendaModalProps> = ({
     } else if (selectedAction === 'clear_appts') {
       onClearAppointmentsOnly();
       onClose();
-    } else if (selectedAction === 'sample') {
-      onResetSampleData();
+    } else if (selectedAction === 'clear_reminders') {
+      if (onClearRemindersOnly) {
+        onClearRemindersOnly();
+      }
       onClose();
     }
   };
@@ -146,24 +151,24 @@ export const ResetAgendaModal: React.FC<ResetAgendaModalProps> = ({
               </div>
             </div>
 
-            {/* Option 3: Reset Sample Data */}
+            {/* Option 3: Clear Call Reminders Only */}
             <div
-              onClick={() => setSelectedAction('sample')}
+              onClick={() => setSelectedAction('clear_reminders')}
               className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
-                selectedAction === 'sample'
-                  ? 'border-emerald-600 bg-emerald-50/70 shadow-sm ring-1 ring-emerald-600'
-                  : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 bg-white'
+                selectedAction === 'clear_reminders'
+                  ? 'border-indigo-600 bg-indigo-50/70 shadow-sm ring-1 ring-indigo-600'
+                  : 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 bg-white'
               }`}
             >
-              <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
-                <RotateCcw className="w-5 h-5" />
+              <div className="p-2 rounded-lg bg-indigo-100 text-indigo-700 shrink-0 mt-0.5">
+                <Bell className="w-5 h-5" />
               </div>
               <div className="flex-1">
-                <h4 className="text-xs font-bold text-emerald-900">
-                  3. Cargar datos de prueba / demostración
+                <h4 className="text-xs font-bold text-indigo-900">
+                  3. Vaciar únicamente los Recordatorios de Llamadas
                 </h4>
                 <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                  Restaura los 100 pacientes y turnos de ejemplo precargados para demostraciones o pruebas.
+                  Elimina todos los avisos y recordatorios de llamadas pendientes ({remindersCount} actualmente) en la aplicación y en Supabase, dejando el contador en 0.
                 </p>
               </div>
             </div>
@@ -213,7 +218,7 @@ export const ResetAgendaModal: React.FC<ResetAgendaModalProps> = ({
                 ? 'bg-rose-600 hover:bg-rose-700 text-white'
                 : selectedAction === 'clear_appts'
                 ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
             }`}
           >
             <CheckCircle2 className="w-4 h-4" />
@@ -222,8 +227,8 @@ export const ResetAgendaModal: React.FC<ResetAgendaModalProps> = ({
                 ? 'Confirmar y Vaciar Todo'
                 : selectedAction === 'clear_appts'
                 ? 'Vaciar Turnos'
-                : selectedAction === 'sample'
-                ? 'Cargar Datos Ejemplo'
+                : selectedAction === 'clear_reminders'
+                ? 'Vaciar Llamadas'
                 : 'Selecciona una opción'}
             </span>
           </button>

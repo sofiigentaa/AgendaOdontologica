@@ -12,9 +12,9 @@ import {
   saveStoredAppointments,
   getStoredInsuranceFiles,
   saveStoredInsuranceFiles,
-  resetToSampleData,
   clearAllAgendaData,
   clearAppointmentsOnly,
+  clearRemindersOnly,
   fetchFromCloudDatabase,
   syncToCloudDatabase
 } from './utils/storage';
@@ -32,7 +32,6 @@ import {
   deleteAttachmentFromCloud
 } from './services/firebaseFirestore';
 import { Contact, CallReminder, ContactNote, ContactAttachment, Appointment, InsuranceFolderFile, ViewMode, FilterType, MainTab } from './types';
-import { INITIAL_APPOINTMENTS } from './data/sampleContacts';
 import { OBRAS_SOCIALES_LIST } from './constants/insurances';
 import { Header } from './components/Header';
 import { ContactCard } from './components/ContactCard';
@@ -60,7 +59,14 @@ import { createGoogleCalendarEvent, sendGmailAppointmentConfirmation } from './s
 import { formatDateWithDayName } from './utils/time';
 import { User } from 'firebase/auth';
 import { supabase } from './supabaseClient';
-import { fetchFromSupabase, syncToSupabase, subscribeToSupabaseRealtime, deleteAppointmentFromSupabase } from './utils/supabaseSync';
+import { 
+  fetchFromSupabase, 
+  syncToSupabase, 
+  subscribeToSupabaseRealtime, 
+  deleteAppointmentFromSupabase,
+  deleteReminderFromSupabase,
+  clearRemindersFromSupabase
+} from './utils/supabaseSync';
 import { 
   Users, 
   UserPlus, 
@@ -216,24 +222,24 @@ export default function App() {
               }
               return c;
             });
-            try { localStorage.setItem('mi_agenda_contacts_v4', JSON.stringify(merged)); } catch {}
+            try { localStorage.setItem('mi_agenda_contacts_v6', JSON.stringify(merged)); } catch {}
             return merged;
           });
         }
         if (sbData.appointments && sbData.appointments.length > 0) {
           setAppointments((prev) => {
             const merged = mergeAppointmentsWithState(sbData.appointments!, prev);
-            try { localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(merged)); } catch {}
+            try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(merged)); } catch {}
             return merged;
           });
         }
-        if (sbData.reminders && sbData.reminders.length > 0) {
+        if (sbData.reminders !== undefined) {
           setReminders(sbData.reminders);
-          try { localStorage.setItem('mi_agenda_reminders_v4', JSON.stringify(sbData.reminders)); } catch {}
+          try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
         }
         if (sbData.notes && sbData.notes.length > 0) {
           setNotes(sbData.notes);
-          try { localStorage.setItem('mi_agenda_notes_v4', JSON.stringify(sbData.notes)); } catch {}
+          try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(sbData.notes)); } catch {}
         }
         if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
           setInsuranceFiles(sbData.insuranceFiles);
@@ -265,24 +271,24 @@ export default function App() {
                 }
                 return c;
               });
-              try { localStorage.setItem('mi_agenda_contacts_v4', JSON.stringify(merged)); } catch {}
+              try { localStorage.setItem('mi_agenda_contacts_v6', JSON.stringify(merged)); } catch {}
               return merged;
             });
           }
           if (sbData.appointments && sbData.appointments.length > 0) {
             setAppointments((prev) => {
               const merged = mergeAppointmentsWithState(sbData.appointments!, prev);
-              try { localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(merged)); } catch {}
+              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(merged)); } catch {}
               return merged;
             });
           }
-          if (sbData.reminders && sbData.reminders.length > 0) {
+          if (sbData.reminders !== undefined) {
             setReminders(sbData.reminders);
-            try { localStorage.setItem('mi_agenda_reminders_v4', JSON.stringify(sbData.reminders)); } catch {}
+            try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
           }
           if (sbData.notes && sbData.notes.length > 0) {
             setNotes(sbData.notes);
-            try { localStorage.setItem('mi_agenda_notes_v4', JSON.stringify(sbData.notes)); } catch {}
+            try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(sbData.notes)); } catch {}
           }
           if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
             setInsuranceFiles(sbData.insuranceFiles);
@@ -343,27 +349,27 @@ export default function App() {
               }
               return c;
             });
-            try { localStorage.setItem('mi_agenda_contacts_v4', JSON.stringify(merged)); } catch {}
+            try { localStorage.setItem('mi_agenda_contacts_v6', JSON.stringify(merged)); } catch {}
             return merged;
           });
         }
         if (sbData.appointments && sbData.appointments.length > 0) {
           setAppointments((prev) => {
             const merged = mergeAppointmentsWithState(sbData.appointments!, prev);
-            try { localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(merged)); } catch {}
+            try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(merged)); } catch {}
             return merged;
           });
         } else if (localAppointments && localAppointments.length > 0) {
           // If cloud has no appointments yet, push local appointments up to cloud
           syncToSupabase({ appointments: localAppointments });
         }
-        if (sbData.reminders && sbData.reminders.length > 0) {
+        if (sbData.reminders !== undefined) {
           setReminders(sbData.reminders);
-          try { localStorage.setItem('mi_agenda_reminders_v4', JSON.stringify(sbData.reminders)); } catch {}
+          try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
         }
         if (sbData.notes && sbData.notes.length > 0) {
           setNotes(sbData.notes);
-          try { localStorage.setItem('mi_agenda_notes_v4', JSON.stringify(sbData.notes)); } catch {}
+          try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(sbData.notes)); } catch {}
         }
         if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
           setInsuranceFiles(sbData.insuranceFiles);
@@ -397,24 +403,24 @@ export default function App() {
                 }
                 return c;
               });
-              try { localStorage.setItem('mi_agenda_contacts_v4', JSON.stringify(merged)); } catch {}
+              try { localStorage.setItem('mi_agenda_contacts_v6', JSON.stringify(merged)); } catch {}
               return merged;
             });
           }
           if (sbData.appointments && sbData.appointments.length > 0) {
             setAppointments((prev) => {
               const merged = mergeAppointmentsWithState(sbData.appointments!, prev);
-              try { localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(merged)); } catch {}
+              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(merged)); } catch {}
               return merged;
             });
           }
-          if (sbData.reminders && sbData.reminders.length > 0) {
+          if (sbData.reminders !== undefined) {
             setReminders(sbData.reminders);
-            try { localStorage.setItem('mi_agenda_reminders_v4', JSON.stringify(sbData.reminders)); } catch {}
+            try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
           }
           if (sbData.notes && sbData.notes.length > 0) {
             setNotes(sbData.notes);
-            try { localStorage.setItem('mi_agenda_notes_v4', JSON.stringify(sbData.notes)); } catch {}
+            try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(sbData.notes)); } catch {}
           }
           if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
             setInsuranceFiles(sbData.insuranceFiles);
@@ -436,19 +442,19 @@ export default function App() {
             showToast(`🟢 ¡Turno Confirmado! ${data.patientName || 'El paciente'} confirmó su asistencia para el día ${data.date || ''} a las ${data.time || ''} hs.`);
             if (payload.agenda?.appointments) {
               setAppointments(payload.agenda.appointments);
-              try { localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(payload.agenda.appointments)); } catch {}
+              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(payload.agenda.appointments)); } catch {}
             }
           } else if (payload.type === 'APPOINTMENT_CANCELLED') {
             const data = payload.data || {};
             showToast(`🔴 Turno Cancelado: ${data.patientName || 'El paciente'} canceló su turno del día ${data.date || ''} a las ${data.time || ''} hs.`);
             if (payload.agenda?.appointments) {
               setAppointments(payload.agenda.appointments);
-              try { localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(payload.agenda.appointments)); } catch {}
+              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(payload.agenda.appointments)); } catch {}
             }
           } else if (payload.type === 'AGENDA_UPDATE' && payload.data) {
             if (payload.data.appointments) {
               setAppointments(payload.data.appointments);
-              try { localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(payload.data.appointments)); } catch {}
+              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(payload.data.appointments)); } catch {}
             }
             if (payload.data.contacts) {
               setContacts(payload.data.contacts);
@@ -1045,7 +1051,15 @@ export default function App() {
   const handleDeleteReminder = (reminderId: string) => {
     const updated = reminders.filter((r) => r.id !== reminderId);
     updateReminders(updated);
+    deleteReminderFromSupabase(reminderId).catch(() => {});
     showToast('Recordatorio eliminado');
+  };
+
+  const handleClearRemindersOnly = () => {
+    clearRemindersOnly();
+    setReminders([]);
+    clearRemindersFromSupabase().catch(() => {});
+    showToast('¡Todos los recordatorios de llamadas han sido eliminados!');
   };
 
   const handleUpdateReminder = (
@@ -1222,17 +1236,6 @@ export default function App() {
     showToast('¡Turnos del calendario eliminados! Se conservaron los pacientes.');
   };
 
-  const handleResetSampleData = () => {
-    resetToSampleData();
-    setContacts(getStoredContacts());
-    setReminders(getStoredReminders());
-    setNotes(getStoredNotes());
-    setAttachments(getStoredAttachments());
-    setAppointments(getStoredAppointments());
-    setInsuranceFiles(getStoredInsuranceFiles());
-    showToast('Datos de ejemplo restablecidos correctamente');
-  };
-
   const pendingRemindersCount = reminders.filter((r) => !r.completed).length;
   const favoritesCount = contacts.filter((c) => c.isFavorite).length;
 
@@ -1387,6 +1390,36 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {/* Reminders filter banner */}
+            {selectedFilter === 'reminders' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 shadow-xs">
+                <div className="flex items-center gap-2 text-xs text-amber-950 font-bold">
+                  <Bell className="w-4 h-4 text-amber-600 animate-pulse" />
+                  <span>Filtrando por Pacientes con Recordatorios de Llamadas ({pendingRemindersCount})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsRemindersModalOpen(true)}
+                    className="px-2.5 py-1 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors cursor-pointer"
+                  >
+                    Ver / Gestionar Llamadas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('¿Deseas eliminar todos los recordatorios de llamadas pendientes?')) {
+                        handleClearRemindersOnly();
+                      }
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Vaciar Llamadas
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Empty State */}
             {filteredContacts.length === 0 ? (
@@ -1572,6 +1605,7 @@ export default function App() {
           setSelectedDetailContact(c);
           setIsDetailModalOpen(true);
         }}
+        onClearAllReminders={handleClearRemindersOnly}
         onShowToast={showToast}
       />
 
@@ -1609,9 +1643,10 @@ export default function App() {
         onClose={() => setIsResetModalOpen(false)}
         onClearAll={handleClearAll}
         onClearAppointmentsOnly={handleClearAppointmentsOnly}
-        onResetSampleData={handleResetSampleData}
+        onClearRemindersOnly={handleClearRemindersOnly}
         contactsCount={contacts.length}
         appointmentsCount={appointments.length}
+        remindersCount={reminders.length}
       />
 
       {/* Google Action Confirmation Dialog */}

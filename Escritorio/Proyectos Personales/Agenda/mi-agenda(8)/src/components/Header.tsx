@@ -208,16 +208,16 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Turnos y Agenda</span>
             </button>
 
-            {/* Carpeta de Obras Sociales */}
+            {/* Carpeta de Archivos */}
             {onOpenInsuranceFolderModal && (
               <button
                 id="btn-open-insurance-folder"
                 type="button"
                 onClick={onOpenInsuranceFolderModal}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-emerald-700/80 hover:bg-emerald-600 active:bg-emerald-800 text-white border border-emerald-400/40 hover:border-white shadow-xs shrink-0 whitespace-nowrap cursor-pointer active:scale-95 min-h-[34px]"
-                title="Ver y adjuntar nomencladores, normativas y aranceles por obra social"
+                title="Ver y adjuntar archivos, fotos y documentos del consultorio"
               >
-                <span>📁 Obras Sociales</span>
+                <span>📁 Archivos</span>
               </button>
             )}
 
@@ -542,7 +542,14 @@ export const Header: React.FC<HeaderProps> = ({
                   <Bell className="w-3.5 h-3.5" />
                   <span>Llamadas</span>
                   {pendingRemindersCount > 0 && (
-                    <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold">
+                    <span 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenRemindersModal();
+                      }}
+                      className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold cursor-pointer transition-transform hover:scale-110 shadow-2xs"
+                      title="Abrir y gestionar o vaciar recordatorios de llamadas"
+                    >
                       {pendingRemindersCount}
                     </span>
                   )}

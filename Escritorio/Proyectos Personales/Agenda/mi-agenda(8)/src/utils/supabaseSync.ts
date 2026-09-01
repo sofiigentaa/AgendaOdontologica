@@ -1,4 +1,4 @@
-import { supabase } from '../supabaseClient';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { Contact, Appointment, CallReminder, ContactNote, ContactAttachment, InsuranceFolderFile } from '../types';
 import { INITIAL_CONTACTS, INITIAL_APPOINTMENTS } from '../data/sampleContacts';
 
@@ -16,6 +16,9 @@ export async function syncToSupabase(data: {
   attachments?: ContactAttachment[];
   insuranceFiles?: InsuranceFolderFile[];
 }) {
+  if (!isSupabaseConfigured) {
+    return;
+  }
   try {
     if (data.contacts && data.contacts.length > 0) {
       const payload = data.contacts.map((c) => ({
@@ -197,6 +200,57 @@ export async function deleteAppointmentFromSupabase(appointmentId: string): Prom
 }
 
 /**
+ * Delete a specific call reminder directly from Supabase table
+ */
+export async function deleteReminderFromSupabase(reminderId: string): Promise<void> {
+  try {
+    await supabase.from('call_reminders').delete().eq('id', reminderId);
+  } catch (e) {
+    console.warn('Could not delete reminder from Supabase:', e);
+  }
+}
+
+/**
+ * Delete all call reminders directly from Supabase table
+ */
+export async function clearRemindersFromSupabase(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  try {
+    await supabase.from('call_reminders').delete().neq('id', '___none___');
+  } catch (e) {
+    console.warn('Could not clear reminders from Supabase:', e);
+  }
+}
+
+/**
+ * Delete all contacts, appointments, reminders, notes and files from Supabase table
+ */
+export async function clearAllFromSupabase(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  try {
+    await Promise.allSettled([
+      supabase.from('call_reminders').delete().neq('id', '___none___'),
+      supabase.from('contact_notes').delete().neq('id', '___none___'),
+      supabase.from('contact_attachments').delete().neq('id', '___none___'),
+      supabase.from('insurance_files').delete().neq('id', '___none___'),
+      supabase.from('appointments').delete().neq('id', '___none___'),
+      supabase.from('contacts').delete().neq('id', '___none___'),
+    ]);
+  } catch (e) {
+    console.warn('Could not clear all from Supabase:', e);
+  }
+}
+
+export async function clearAppointmentsFromSupabase(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  try {
+    await supabase.from('appointments').delete().neq('id', '___none___');
+  } catch (e) {
+    console.warn('Could not clear appointments from Supabase:', e);
+  }
+}
+
+/**
  * Fetch all records from Supabase with resilient fallbacks and alias resolution
  */
 export async function fetchFromSupabase(): Promise<{
@@ -206,6 +260,9 @@ export async function fetchFromSupabase(): Promise<{
   notes?: ContactNote[];
   insuranceFiles?: InsuranceFolderFile[];
 } | null> {
+  if (!isSupabaseConfigured) {
+    return null;
+  }
   try {
     const [contactsRes, appointmentsRes, remindersRes, notesRes, filesRes] = await Promise.all([
       supabase.from('contacts').select('*'),
@@ -277,13 +334,16 @@ export async function fetchFromSupabase(): Promise<{
           createdAt: row.createdAt || row.created_at || parsedNotesObj?.createdAt || new Date().toISOString(),
           updatedAt: row.updatedAt || row.updated_at || parsedNotesObj?.updatedAt || new Date().toISOString(),
         };
-      });
+      }).filter((c: any) => c && c.id && !c.id.startsWith('sample-') && !c.id.startsWith('demo-'));
     }
 
     if (appointmentsRes.data && appointmentsRes.data.length > 0) {
       const activeRows: any[] = [];
       
       for (const row of appointmentsRes.data) {
+        if (row.id && (row.id.startsWith('appt-sample-') || row.id.startsWith('sample-') || row.contact_id?.startsWith('sample-') || row.contactId?.startsWith('sample-'))) {
+          continue;
+        }
         let rawObj: any = {};
         try {
           if (row.notes && typeof row.notes === 'string' && row.notes.startsWith('{')) {
@@ -334,7 +394,7 @@ export async function fetchFromSupabase(): Promise<{
       result.appointments = activeRows;
     }
 
-    if (remindersRes.data && remindersRes.data.length > 0) {
+    if (!remindersRes.error && Array.isArray(remindersRes.data)) {
       result.reminders = remindersRes.data.map((row: any) => {
         let rawRem: any = {};
         try {
@@ -389,6 +449,9 @@ export async function fetchFromSupabase(): Promise<{
  * Subscribe directly to Supabase Realtime Channels with robust background sync fallback
  */
 export function subscribeToSupabaseRealtime(onSync: () => void): () => void {
+  if (!isSupabaseConfigured) {
+    return () => {};
+  }
   let active = true;
   let channel: any = null;
 
