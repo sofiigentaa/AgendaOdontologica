@@ -1,0 +1,6 @@
+{
+  "name": "Sistema de Gestión Kiosco",
+  "description": "Punto de venta (POS), inventario en tiempo real, alertas de stock y vencimiento, reportes de ventas, márgenes y reposición para kioscos y almacenes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
