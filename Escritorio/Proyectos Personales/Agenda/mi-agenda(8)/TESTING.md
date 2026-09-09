@@ -49,17 +49,4 @@ PLAYWRIGHT_BASE_URL=https://tu-app.onrender.com npm run test:e2e
 | WhatsApp y vCard (TC-PAC-06 / 07) | `src/utils/whatsappVcard.test.ts` | `wa.me` y ficha vCard |
 | Backup JSON/TXT (MOD-11) | `src/utils/fileImporter.test.ts` | Import JSON, roundtrip TXT, fecha ISO |
 
-## Qué sigue siendo manual / fuera de alcance
 
-- Envío real de WhatsApp / Gmail / Google Calendar
-- Asistente IA (Gemini)
-- Persistencia IndexedDB de PDFs grandes
-- Sync en vivo con Supabase/Firebase contra cuentas reales
-- Layout mobile detallado (los E2E corren en viewport desktop)
-
-## Bugs corregidos al automatizar
-
-- Confirmación por Gmail usaba `primaryEmail` (no existe en el modelo); ahora usa `email`.
-- Import TXT con fecha `YYYY-MM-DD` invertía día y año.
-- La copia de seguridad JSON no normalizaba turnos incompletos.
-- Fechas por defecto del turno usaban UTC (`toISOString`), incorrecto de noche en Argentina.
