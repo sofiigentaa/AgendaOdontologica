@@ -19,4 +19,8 @@ coverage/
 
 # Local test cases & private notes
 test_cases.txt
+playwright-report/
+test-results/
+blob-report/
+agenda_storage.json
 

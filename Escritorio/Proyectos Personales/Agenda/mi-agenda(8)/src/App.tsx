@@ -56,7 +56,8 @@ import { PatientSearchSelect } from './components/PatientSearchSelect';
 import { GoogleActionModal, GoogleActionType } from './components/GoogleActionModal';
 import { initAuth, googleSignIn, logoutGoogle, getAccessToken } from './services/googleAuth';
 import { createGoogleCalendarEvent, sendGmailAppointmentConfirmation } from './services/googleWorkspace';
-import { formatDateWithDayName } from './utils/time';
+import { formatDateWithDayName, getTodayISO } from './utils/time';
+import { filterContacts } from './utils/contactFilters';
 import { User } from 'firebase/auth';
 import { supabase } from './supabaseClient';
 import { 
@@ -794,7 +795,7 @@ export default function App() {
 
   const handleOpenScheduleModalGeneral = (initialDate?: string, editingAppt?: Appointment | null, initialTime?: string) => {
     setScheduleModalInitialContactId(editingAppt ? editingAppt.contactId : '');
-    setScheduleModalInitialDate(initialDate || new Date().toISOString().split('T')[0]);
+    setScheduleModalInitialDate(initialDate || getTodayISO());
     setScheduleModalInitialTime(initialTime || '');
     setEditingAppointment(editingAppt || null);
     setIsScheduleContactLocked(Boolean(editingAppt));
@@ -803,7 +804,7 @@ export default function App() {
 
   const handleOpenScheduleModalForContact = (contact: Contact) => {
     setScheduleModalInitialContactId(contact.id);
-    setScheduleModalInitialDate(new Date().toISOString().split('T')[0]);
+    setScheduleModalInitialDate(getTodayISO());
     setEditingAppointment(null);
     setIsScheduleContactLocked(true);
     setIsScheduleModalOpen(true);
@@ -893,46 +894,13 @@ export default function App() {
 
   // Filter contacts by search and filter chips
   const filteredContacts = useMemo(() => {
-    return contacts.filter((contact) => {
-      // Search term filter (by name, primary phone, alt phone, email, insurance, affiliate or address)
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const nameMatch = contact.fullName.toLowerCase().includes(query);
-        const phoneMatch = contact.primaryPhone.includes(query) || (contact.altPhone && contact.altPhone.includes(query));
-        const emailMatch = contact.email ? contact.email.toLowerCase().includes(query) : false;
-        const insuranceMatch = contact.insuranceName ? contact.insuranceName.toLowerCase().includes(query) : false;
-        const affiliateMatch = contact.affiliateNumber ? contact.affiliateNumber.toLowerCase().includes(query) : false;
-        const obsMatch = contact.observations ? contact.observations.toLowerCase().includes(query) : false;
-
-        if (!nameMatch && !phoneMatch && !emailMatch && !insuranceMatch && !affiliateMatch && !obsMatch) {
-          return false;
-        }
-      }
-
-      // Filter category
-      if (selectedFilter === 'favorites' && !contact.isFavorite) {
-        return false;
-      }
-
-      if (selectedFilter === 'particular' && !contact.isParticular) {
-        return false;
-      }
-
-      if (selectedFilter === 'reminders') {
-        const hasActiveRem = reminders.some((r) => r.contactId === contact.id && !r.completed);
-        if (!hasActiveRem) return false;
-      }
-
-      if (selectedFilter === 'notes') {
-        const hasNotes = notes.some((n) => n.contactId === contact.id);
-        if (!hasNotes) return false;
-      }
-
-      if (selectedInsurance && contact.insuranceName !== selectedInsurance) {
-        return false;
-      }
-
-      return true;
+    return filterContacts({
+      contacts,
+      searchTerm,
+      selectedFilter,
+      selectedInsurance,
+      reminders,
+      notes,
     });
   }, [contacts, searchTerm, selectedFilter, selectedInsurance, reminders, notes]);
 
@@ -1379,6 +1347,7 @@ export default function App() {
                 </div>
                 <button
                   type="button"
+                  data-testid="btn-new-patient"
                   onClick={() => {
                     setEditingContact(null);
                     setIsFormModalOpen(true);

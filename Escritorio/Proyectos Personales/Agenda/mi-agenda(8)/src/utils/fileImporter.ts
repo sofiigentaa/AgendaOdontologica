@@ -1,4 +1,5 @@
 import { Contact, Appointment } from '../types';
+import { getTodayISO } from './time';
 
 export interface ParsedImportData {
   contacts?: Contact[];
@@ -33,6 +34,43 @@ function createContact(partial: any, index: number = 0): Contact {
   };
 }
 
+function normalizeAppointment(partial: any, index: number = 0): Appointment {
+  return {
+    id: partial.id || `appt-${Date.now()}-${index}`,
+    contactId: partial.contactId || partial.patientId || '',
+    date: partial.date || getTodayISO(),
+    time: partial.time || '09:00',
+    durationMinutes: Number(partial.durationMinutes) || 30,
+    motive: partial.motive || partial.treatment || 'Consulta general',
+    dentist: partial.dentist || 'Yani',
+    completed: Boolean(partial.completed),
+    ingresos: Number(partial.ingresos) || 0,
+    descartables: Number(partial.descartables) || 0,
+    estampillas: Number(partial.estampillas) || 0,
+    materiales: Number(partial.materiales) || 0,
+    mecanicoDental: Number(partial.mecanicoDental) || 0,
+    porcentajeHonorario:
+      partial.porcentajeHonorario !== undefined && partial.porcentajeHonorario !== null
+        ? Number(partial.porcentajeHonorario)
+        : 50,
+    whatsappStatus: partial.whatsappStatus || 'pending',
+    whatsappLastReply: partial.whatsappLastReply,
+    createdAt: partial.createdAt || new Date().toISOString(),
+  };
+}
+
+function detectTxtListingDate(trimmed: string): string {
+  const parenDate = trimmed.match(/\((\d{2})\/(\d{2})\/(\d{4})\)/);
+  if (parenDate) {
+    return `${parenDate[3]}-${parenDate[2]}-${parenDate[1]}`;
+  }
+  const isoDate = trimmed.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+  }
+  return getTodayISO();
+}
+
 /**
  * Parsea contenido de archivo .txt o .json de forma universal
  */
@@ -56,20 +94,7 @@ export function parseImportFileContent(rawContent: string, fileName: string = ''
 
         // ¿Son turnos o contactos?
         if ('date' in parsed[0] || 'time' in parsed[0] || 'motive' in parsed[0]) {
-          const appts: Appointment[] = parsed.map((a: any, idx: number) => ({
-            id: a.id || `appt-${Date.now()}-${idx}`,
-            contactId: a.contactId || a.patientId || '',
-            date: a.date || new Date().toISOString().split('T')[0],
-            time: a.time || '09:00',
-            durationMinutes: a.durationMinutes || 30,
-            motive: a.motive || a.treatment || 'Consulta general',
-            dentist: a.dentist || 'Yani',
-            completed: Boolean(a.completed),
-            whatsappStatus: a.whatsappStatus || 'pending',
-            whatsappLastReply: a.whatsappLastReply,
-            observations: a.observations || '',
-            createdAt: a.createdAt || new Date().toISOString(),
-          }));
+          const appts: Appointment[] = parsed.map((a: any, idx: number) => normalizeAppointment(a, idx));
           return {
             appointments: appts,
             summaryMessage: `✅ Se importaron ${appts.length} turnos del archivo.`,
@@ -97,7 +122,7 @@ export function parseImportFileContent(rawContent: string, fileName: string = ''
           counts.push(`${result.contacts.length} pacientes`);
         }
         if (Array.isArray(parsed.appointments) && parsed.appointments.length > 0) {
-          result.appointments = parsed.appointments;
+          result.appointments = parsed.appointments.map((a: any, idx: number) => normalizeAppointment(a, idx));
           counts.push(`${result.appointments.length} turnos`);
         }
         if (Array.isArray(parsed.reminders)) result.reminders = parsed.reminders;
@@ -128,18 +153,7 @@ export function parseImportFileContent(rawContent: string, fileName: string = ''
     const parsedAppts: Appointment[] = [];
     const parsedContacts: Contact[] = [];
     
-    // Extraer fecha global si existe
-    let detectedDate = new Date().toISOString().split('T')[0];
-    const dateMatch = trimmed.match(/\((\d{2})\/(\d{2})\/(\d{4})\)/) || trimmed.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (dateMatch) {
-      if (dateMatch[3]) {
-        // DD/MM/YYYY
-        detectedDate = `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
-      } else if (dateMatch[1]?.length === 4) {
-        // YYYY-MM-DD
-        detectedDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
-      }
-    }
+    const detectedDate = detectTxtListingDate(trimmed);
 
     const blocks = trimmed.split(/TURNO\s*#\d+:/i);
     blocks.slice(1).forEach((block, idx) => {

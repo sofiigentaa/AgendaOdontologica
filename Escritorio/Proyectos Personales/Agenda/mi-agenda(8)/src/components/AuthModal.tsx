@@ -77,6 +77,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
               <input
                 type="email"
                 required
+                data-testid="auth-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="odontologo@tuclinica.com"
@@ -92,6 +93,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
               <input
                 type="password"
                 required
+                data-testid="auth-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -102,6 +104,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
 
           <button
             type="submit"
+            data-testid="auth-submit"
             disabled={loading}
             className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
           >

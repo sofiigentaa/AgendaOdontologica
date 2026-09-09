@@ -1,20 +1,18 @@
 import { Contact, Appointment } from '../types';
-import { formatDateDDMMYYYY, formatDateWithDayName } from './time';
+import { formatDateDDMMYYYY, formatDateWithDayName, getTodayISO } from './time';
 
-/**
- * Genera y descarga un archivo plano (.txt) con la agenda de turnos del día siguiente
- * (o de un día especificado) por si se cae el servidor o no hay internet.
- */
-export function exportNextDayAppointmentsPlainFile(
+export function getNextCalendarDayISO(baseDate?: Date): string {
+  const target = baseDate ? new Date(baseDate) : new Date();
+  target.setDate(target.getDate() + 1);
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+}
+
+export function buildNextDayAppointmentsText(
   appointments: Appointment[],
   contacts: Contact[],
   baseDate?: Date
-) {
-  const target = baseDate ? new Date(baseDate) : new Date();
-  // Sumar 1 día para obtener el día que le sigue
-  target.setDate(target.getDate() + 1);
-
-  const targetDateStr = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+): { content: string; targetDateStr: string } {
+  const targetDateStr = getNextCalendarDayISO(baseDate);
   const dayNameFormatted = formatDateWithDayName(targetDateStr);
 
   const dayAppointments = appointments
@@ -70,16 +68,10 @@ export function exportNextDayAppointmentsPlainFile(
   content += `Archivo generado para contingencias ante corte de servicio o internet.\n`;
   content += `==============================================================\n`;
 
-  downloadTextFile(
-    content,
-    `Turnos_Dia_Siguiente_${targetDateStr}.txt`
-  );
+  return { content, targetDateStr };
 }
 
-/**
- * Genera y descarga un archivo plano (.txt o .csv) con todos los pacientes registrados.
- */
-export function exportContactsPlainFile(contacts: Contact[]) {
+export function buildContactsDirectoryText(contacts: Contact[]): string {
   const sorted = [...contacts].sort((a, b) =>
     a.fullName.localeCompare(b.fullName, 'es', { sensitivity: 'base' })
   );
@@ -101,13 +93,23 @@ export function exportContactsPlainFile(contacts: Contact[]) {
     content += `\n`;
   });
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  downloadTextFile(content, `Directorio_Pacientes_${todayStr}.txt`);
+  return content;
 }
 
-/**
- * Función utilitaria para disparar la descarga de cualquier archivo de texto
- */
+export function exportNextDayAppointmentsPlainFile(
+  appointments: Appointment[],
+  contacts: Contact[],
+  baseDate?: Date
+) {
+  const { content, targetDateStr } = buildNextDayAppointmentsText(appointments, contacts, baseDate);
+  downloadTextFile(content, `Turnos_Dia_Siguiente_${targetDateStr}.txt`);
+}
+
+export function exportContactsPlainFile(contacts: Contact[]) {
+  const content = buildContactsDirectoryText(contacts);
+  downloadTextFile(content, `Directorio_Pacientes_${getTodayISO()}.txt`);
+}
+
 function downloadTextFile(content: string, filename: string) {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);

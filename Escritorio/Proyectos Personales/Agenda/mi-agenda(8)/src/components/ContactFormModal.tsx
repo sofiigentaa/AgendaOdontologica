@@ -201,6 +201,7 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
               </label>
               <input
                 type="text"
+                data-testid="contact-fullname"
                 value={fullName}
                 onChange={(e) => {
                   setFullName(e.target.value);
@@ -412,6 +413,7 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
                     type="text"
+                    data-testid="contact-phone"
                     value={primaryPhone}
                     onChange={(e) => {
                       setPrimaryPhone(e.target.value);

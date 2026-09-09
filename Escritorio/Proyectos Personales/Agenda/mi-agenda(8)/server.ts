@@ -13,6 +13,18 @@ const DATA_FILE_PATH = path.join(process.cwd(), 'agenda_storage.json');
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
+function isProduction() {
+  return process.env.NODE_ENV === 'production';
+}
+
+function isAdminRequest(req: express.Request): boolean {
+  const token = process.env.ADMIN_API_TOKEN;
+  if (token) {
+    return req.get('x-admin-token') === token;
+  }
+  return !isProduction();
+}
+
 // In-memory Shared Store for zero-quota sub-50ms multi-device synchronization
 let sharedAgendaStore: {
   contacts?: any[];
@@ -542,6 +554,9 @@ app.delete('/api/sync/insurance-file/:id', (req, res) => {
 
 // Clear / Wipe Database API Endpoints
 app.post('/api/db/clear', async (req, res) => {
+  if (!isAdminRequest(req)) {
+    return res.status(403).json({ success: false, error: 'No autorizado' });
+  }
   try {
     const { target } = req.body;
     
@@ -594,6 +609,9 @@ app.post('/api/db/clear', async (req, res) => {
 
 // Database API Endpoints (Cloud SQL PostgreSQL)
 app.get('/api/db/all', async (req, res) => {
+  if (!isAdminRequest(req)) {
+    return res.status(403).json({ success: false, error: 'No autorizado' });
+  }
   if (!isDbConfigured) {
     return res.json({ dbAvailable: false, contacts: [], appointments: [], reminders: [], notes: [], attachments: [], insuranceFiles: [] });
   }

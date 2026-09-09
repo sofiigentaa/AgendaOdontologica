@@ -15,6 +15,7 @@ import {
 import { Appointment, Contact } from '../types';
 import { TREATMENT_PRESETS } from '../constants/treatments';
 import { formatDuration, getTodayISO, formatDateDDMMYYYY } from '../utils/time';
+import { findConflictingAppointment } from '../utils/appointmentConflicts';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { CustomTimePicker } from './CustomTimePicker';
 
@@ -117,7 +118,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
         setPorcentajeHonorario(editingAppointment.porcentajeHonorario ?? 50);
       } else {
         setSelectedContactId(initialContactId || '');
-        setDate(initialDate || new Date().toISOString().split('T')[0]);
+        setDate(initialDate || getTodayISO());
         setTime(initialTime || '09:00');
         setDurationMinutes(30);
         setMotive('');
@@ -158,19 +159,6 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
   const quickTimePresets = ['08:30', '09:00', '10:00', '11:30', '14:00', '15:00', '16:30', '17:30'];
 
-  // Helper function to check if two time ranges overlap
-  const checkTimeOverlap = (start1: string, dur1: number, start2: string, dur2: number): boolean => {
-    const toMin = (t: string) => {
-      const [h, m] = t.split(':').map(Number);
-      return (h || 0) * 60 + (m || 0);
-    };
-    const s1 = toMin(start1);
-    const e1 = s1 + (dur1 || 30);
-    const s2 = toMin(start2);
-    const e2 = s2 + (dur2 || 30);
-    return Math.max(s1, s2) < Math.min(e1, e2);
-  };
-
   const processSave = () => {
     const apptPayload = {
       contactId: selectedContactId,
@@ -195,11 +183,11 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
     // Trigger Google Workspace sync/email if selected
     if (onPromptGoogleAction && selectedContact && googleUser) {
-      if (syncGoogleCalendar && sendGmailConfirmation && selectedContact.primaryEmail) {
+      if (syncGoogleCalendar && sendGmailConfirmation && selectedContact.email) {
         onPromptGoogleAction('sync_and_email' as any, apptPayload, selectedContact);
       } else if (syncGoogleCalendar) {
         onPromptGoogleAction('sync_calendar', apptPayload, selectedContact);
-      } else if (sendGmailConfirmation && selectedContact.primaryEmail) {
+      } else if (sendGmailConfirmation && selectedContact.email) {
         onPromptGoogleAction('send_email', apptPayload, selectedContact);
       }
     }
@@ -228,27 +216,12 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
     const currentDuration = Number(durationMinutes) || 30;
 
-    // Check for collision with existing appointments on the same date for the same dentist (only for new appointments)
     if (appointments && appointments.length > 0) {
-      const conflicting = appointments.find((appt) => {
-        // Must be the same date
-        if (appt.date !== date) return false;
-        // Do not block completed or cancelled appointments
-        if (appt.completed) return false;
-        if (appt.whatsappStatus === 'cancelled') return false;
-
-        // Check dentist collision: if either is "Ambas", or if dentists match
-        const apptDentist = appt.dentist || 'Yani';
-        const targetDentist = dentist || 'Marie';
-        const isDentistConflict =
-          apptDentist === targetDentist ||
-          apptDentist === 'Ambas' ||
-          targetDentist === 'Ambas';
-
-        if (!isDentistConflict) return false;
-
-        // Check time overlap
-        return checkTimeOverlap(time, currentDuration, appt.time, appt.durationMinutes || 30);
+      const conflicting = findConflictingAppointment(appointments, {
+        date,
+        time,
+        durationMinutes: currentDuration,
+        dentist,
       });
 
       if (conflicting) {
@@ -435,6 +408,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
+                data-testid="dentist-marie"
                 onClick={() => setDentist('Marie')}
                 className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center transition-all text-center ${
                   dentist === 'Marie'
@@ -493,6 +467,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                 </label>
                 <input
                   type="date"
+                  data-testid="appt-date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   className="w-full h-11 px-2.5 sm:px-3 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 font-bold focus:ring-2 focus:ring-[#2E7D5E] focus:bg-white focus:outline-none transition-all shadow-2xs"
@@ -577,6 +552,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                     <button
                       key={preset.id}
                       type="button"
+                      data-testid={`treatment-${preset.id}`}
                       onClick={() => {
                         if (isOtro) {
                           setMotive('');
@@ -847,6 +823,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
             </button>
             <button
               type="submit"
+              data-testid="appt-save"
               className="px-5 py-2.5 bg-[#4CAF7D] hover:bg-[#3d986b] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
             >
               <CalendarIcon className="w-4 h-4" />

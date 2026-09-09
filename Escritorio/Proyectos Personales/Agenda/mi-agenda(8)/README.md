@@ -1,20 +1,47 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Agenda Odontológica — Consultorio Marie & Yani
 
-# Run and deploy your AI Studio app
+Agenda web para un consultorio con dos odontólogas: pacientes, turnos, ficha clínica y liquidación diaria.
 
-This contains everything you need to run your app locally.
+**Demo:** [https://agendaodontologica-cuvt.onrender.com](https://agendaodontologica-cuvt.onrender.com)
 
-View your app in AI Studio: https://ai.studio/apps/97eccca2-0410-45bd-8189-c208e6e964f8
+Versión de trabajo: `Escritorio/Proyectos Personales/Agenda/mi-agenda(8)`
 
-## Run Locally
+## Stack
 
-**Prerequisites:**  Node.js
+React 19 + Vite + Express + Tailwind. Persistencia principal: **localStorage** del navegador. Opcional: archivo en el servidor, Supabase, Firebase/Google y PostgreSQL (Drizzle) si hay variables de entorno.
 
+El deploy actual en Render **no tiene PostgreSQL conectado** (`/api/db/all` responde `dbAvailable: false`). Los datos viven en el browser de cada dispositivo. Si Render reinicia el servicio, el archivo `agenda_storage.json` del servidor se pierde.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Funcionalidades
+
+- Pacientes (alta, filtros, vCard)
+- Calendario y turnos con colisiones
+- Notas, recordatorios y archivos
+- Finanzas Marie / Yani / ambas
+- Backup JSON y TXT de contingencia
+- Login de consultorio (demo) y WhatsApp / IA opcionales
+
+## Instalación
+
+```bash
+cd "Escritorio/Proyectos Personales/Agenda/mi-agenda(8)"
+npm install
+npx playwright install chromium
+npm run dev
+```
+
+Abrí http://localhost:3000 — email cualquiera y contraseña `admin123`.
+
+Variables opcionales: copiá `.env.example` a `.env.local` (`GEMINI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). En el servidor: `DATABASE_URL` (Postgres), `ADMIN_API_TOKEN` (protege wipe de datos).
+
+## Tests
+
+```bash
+npm test                 # lógica (Vitest)
+npm run test:e2e         # interfaz local (Playwright)
+npm run test:e2e:prod    # interfaz contra Render (no crea pacientes)
+npm run lint             # TypeScript
+npm run build            # build de producción
+```
+
+Detalle: [TESTING.md](./TESTING.md)

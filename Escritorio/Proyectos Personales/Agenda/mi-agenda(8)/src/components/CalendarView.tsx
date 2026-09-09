@@ -460,6 +460,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             {/* Quick 'Hoy' shortcut button */}
             <button
               type="button"
+              data-testid="calendar-today"
               onClick={handleToday}
               title="Ir al día de hoy"
               className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-[#2E7D5E] border border-emerald-300 flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs active:scale-95 transition-all"
@@ -472,6 +473,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
               <button
                 type="button"
+                data-testid="calendar-view-month"
                 onClick={() => setCalendarSubMode('month')}
                 className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${
                   calendarSubMode === 'month'
@@ -483,6 +485,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               </button>
               <button
                 type="button"
+                data-testid="calendar-view-list"
                 onClick={() => {
                   setCalendarSubMode('list');
                   setHighlightedDay(todayStr);
@@ -844,12 +847,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
                       <button
                         type="button"
+                        data-testid={isToday ? 'btn-add-turno-today' : undefined}
                         onClick={(e) => {
                           e.stopPropagation();
                           onOpenScheduleModal(dayStr);
                         }}
                         title={`Agendar turno para ${dayOfWeekShort} ${dayNum}`}
-                        className="opacity-0 group-hover:opacity-100 hidden sm:inline-block px-1.5 py-0.5 text-[#2E7D5E] bg-emerald-50 hover:bg-emerald-100 rounded text-[9.5px] font-bold border border-emerald-200 shrink-0 whitespace-nowrap transition-all"
+                        className={`${isToday ? 'opacity-100 sm:inline-block' : 'opacity-0 group-hover:opacity-100 hidden sm:inline-block'} px-1.5 py-0.5 text-[#2E7D5E] bg-emerald-50 hover:bg-emerald-100 rounded text-[9.5px] font-bold border border-emerald-200 shrink-0 whitespace-nowrap transition-all`}
                       >
                         + Turno
                       </button>
@@ -1013,6 +1017,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <p className="text-sm font-semibold text-slate-700">No se encontraron turnos agendados.</p>
               <button
                 type="button"
+                data-testid="btn-schedule-first"
                 onClick={() => onOpenScheduleModal()}
                 className="px-4 py-2 bg-[#2E7D5E] hover:bg-[#24664c] active:bg-[#1e543e] text-white font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
               >

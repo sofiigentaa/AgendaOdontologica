@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, ChevronDown, X, User, Phone, Shield, UserPlus, Check } from 'lucide-react';
 import { Contact } from '../types';
+import { filterPatientsForAutocomplete } from '../utils/contactFilters';
 
 interface PatientSearchSelectProps {
   id?: string;
@@ -31,25 +32,10 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
   const listRef = useRef<HTMLUListElement>(null);
 
   // Alphabetically sorted contacts
-  const sortedContacts = useMemo(() => {
-    return [...contacts].sort((a, b) => 
-      a.fullName.localeCompare(b.fullName, 'es', { sensitivity: 'base' })
-    );
-  }, [contacts]);
-
-  // Filtered contacts based on query
-  const filteredContacts = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return sortedContacts;
-    return sortedContacts.filter((c) => {
-      const nameMatch = c.fullName.toLowerCase().includes(q);
-      const phoneMatch = c.primaryPhone ? c.primaryPhone.toLowerCase().includes(q) : false;
-      const insuranceMatch = c.insuranceName ? c.insuranceName.toLowerCase().includes(q) : false;
-      const affiliateMatch = c.affiliateNumber ? c.affiliateNumber.toLowerCase().includes(q) : false;
-      const particularMatch = c.isParticular && 'particular'.includes(q);
-      return nameMatch || phoneMatch || insuranceMatch || affiliateMatch || particularMatch;
-    });
-  }, [sortedContacts, query]);
+  const filteredContacts = useMemo(
+    () => filterPatientsForAutocomplete(contacts, query),
+    [contacts, query]
+  );
 
   // Sync query if a selected contact is passed and not in clearOnSelect mode
   useEffect(() => {
@@ -188,7 +174,7 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
           {/* Top suggestion header */}
           <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500">
             <span>
-              {query ? `Sugerencias para "${query}" (${filteredContacts.length})` : `Todos los pacientes (${sortedContacts.length})`}
+              {query ? `Sugerencias para "${query}" (${filteredContacts.length})` : `Todos los pacientes (${filteredContacts.length})`}
             </span>
             <span className="text-[10px] text-slate-400">
               Usa ↑ ↓ y Enter para elegir

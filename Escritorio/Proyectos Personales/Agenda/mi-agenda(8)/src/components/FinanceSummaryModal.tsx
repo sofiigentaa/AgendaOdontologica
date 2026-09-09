@@ -16,6 +16,12 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Appointment, Contact } from '../types';
+import {
+  calculateDailyTotals,
+  calculateTurnStats,
+  filterAppointmentsByFinanceMode,
+  isApptAttended,
+} from '../utils/finance';
 
 interface FinanceSummaryModalProps {
   isOpen: boolean;
@@ -144,75 +150,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
     setEditingApptId(null);
   };
 
-  // Helper to determine if an appointment counts as attended/completed
-  const isApptAttended = (appt: Appointment) => {
-    return Boolean(appt.completed);
-  };
-
-  // Helper to calculate turn financial stats
-  const calculateTurnStats = (appt: Appointment) => {
-    if (!appt) {
-      return {
-        ingresos: 0,
-        descartables: 0,
-        estampillas: 0,
-        materiales: 0,
-        mecanico: 0,
-        totalEgresos: 0,
-        balanceNeto: 0,
-        pctPercent: 50,
-        honorarioTotal: 0,
-        correspondyYani: 0,
-        correspondyMarie: 0,
-        dentist: 'Yani' as const,
-        isAttended: false,
-      };
-    }
-
-    const isAttended = isApptAttended(appt);
-    const ingresos = Number(appt.ingresos) || 0;
-    const descartables = Number(appt.descartables) || 0;
-    const estampillas = Number(appt.estampillas) || 0;
-    const materiales = Number(appt.materiales) || 0;
-    const mecanico = Number(appt.mecanicoDental) || 0;
-    const totalEgresos = descartables + estampillas + materiales + mecanico;
-    const balanceNeto = Math.max(0, ingresos - totalEgresos);
-    const rawPct = appt.porcentajeHonorario !== undefined && appt.porcentajeHonorario !== null ? Number(appt.porcentajeHonorario) : 50;
-    const pctPercent = isNaN(rawPct) ? 50 : rawPct;
-    const pct = pctPercent / 100;
-    const honorarioTotal = balanceNeto * pct;
-
-    let correspondyYani = 0;
-    let correspondyMarie = 0;
-
-    const dentist = appt.dentist || 'Yani';
-    if (dentist === 'Ambas') {
-      correspondyYani = honorarioTotal / 2;
-      correspondyMarie = honorarioTotal / 2;
-    } else if (dentist === 'Marie') {
-      correspondyMarie = honorarioTotal;
-    } else {
-      correspondyYani = honorarioTotal;
-    }
-
-    return {
-      ingresos,
-      descartables,
-      estampillas,
-      materiales,
-      mecanico,
-      totalEgresos,
-      balanceNeto,
-      pctPercent,
-      honorarioTotal,
-      correspondyYani,
-      correspondyMarie,
-      dentist,
-      isAttended,
-    };
-  };
-
-  // Group appointments by date
   const dayAppointments = useMemo(() => {
     const list = (appointments || []).filter((appt) => appt && appt.date === selectedDate);
     return list.sort((a, b) => a.time.localeCompare(b.time));
@@ -229,55 +166,10 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
 
   // Filtered list according to current filterMode
   const filteredAppointments = useMemo(() => {
-    if (filterMode === 'attendedOnly') {
-      return dayAppointments.filter(isApptAttended);
-    }
-    if (filterMode === 'pendingOnly') {
-      return dayAppointments.filter((a) => !isApptAttended(a));
-    }
-    return dayAppointments;
+    return filterAppointmentsByFinanceMode(dayAppointments, filterMode);
   }, [dayAppointments, filterMode]);
 
-  // Daily Totals (Attended turns only)
-  const dailyTotals = useMemo(() => {
-    let totIngresos = 0;
-    let totEgresos = 0;
-    let totDescartables = 0;
-    let totEstampillas = 0;
-    let totMateriales = 0;
-    let totMecanico = 0;
-    let totYani = 0;
-    let totMarie = 0;
-
-    dayAppointments.forEach((appt) => {
-      // Only attended appointments contribute to the settlement
-      if (!isApptAttended(appt)) return;
-
-      const s = calculateTurnStats(appt);
-      if (s) {
-        totIngresos += s.ingresos || 0;
-        totEgresos += s.totalEgresos || 0;
-        totDescartables += s.descartables || 0;
-        totEstampillas += s.estampillas || 0;
-        totMateriales += s.materiales || 0;
-        totMecanico += s.mecanico || 0;
-        totYani += s.correspondyYani || 0;
-        totMarie += s.correspondyMarie || 0;
-      }
-    });
-
-    return {
-      totIngresos,
-      totEgresos,
-      totDescartables,
-      totEstampillas,
-      totMateriales,
-      totMecanico,
-      totYani,
-      totMarie,
-      totNeto: Math.max(0, totIngresos - totEgresos),
-    };
-  }, [dayAppointments]);
+  const dailyTotals = useMemo(() => calculateDailyTotals(dayAppointments), [dayAppointments]);
 
   const formatMoney = (val: any) => {
     try {
