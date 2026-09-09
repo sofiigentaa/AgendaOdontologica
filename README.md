@@ -7,6 +7,12 @@ Aplicación web para gestionar **pacientes, turnos, ficha clínica y liquidació
 Código de trabajo: [`Escritorio/Proyectos Personales/Agenda/mi-agenda(8)`](Escritorio/Proyectos%20Personales/Agenda/mi-agenda(8))  
 (las carpetas `mi-agenda(2)` a `(7)` son copias históricas)
 
+## Documentación
+
+- [Documento funcional](DOCUMENTO-FUNCIONAL.md)
+- [Manual de casos de uso](MANUAL-CASOS-DE-USO.md)
+- [Testing](Escritorio/Proyectos%20Personales/Agenda/mi-agenda(8)/TESTING.md)
+
 ## Funcionalidades
 
 - Alta, búsqueda y filtros de pacientes (obra social / particular)
