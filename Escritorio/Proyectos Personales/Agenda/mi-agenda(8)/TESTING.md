@@ -1,4 +1,4 @@
-# Testing — Agenda Odontológica
+# Testing - Agenda Odontológica
 
 Los tests automatizan la lógica crítica que antes se validaba a mano. No cubren Google/WhatsApp/IA de punta a punta (dependen de cuentas y de la UI).
 
