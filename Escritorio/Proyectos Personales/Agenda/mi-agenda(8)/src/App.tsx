@@ -187,10 +187,21 @@ export default function App() {
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
 
   // Authentication gate for dental team
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('auth_session_token') === 'active';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.authenticated) {
+          setIsAuthenticated(true);
+        } else {
+          localStorage.removeItem('auth_session_token');
+          setIsAuthenticated(false);
+        }
+      })
+      .catch(() => setIsAuthenticated(false));
+  }, []);
 
   // Check if this is a patient accessing a 1-click confirmation / cancellation link
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -622,6 +633,7 @@ export default function App() {
       fetch('/api/sync/agenda', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ contacts: newContacts }),
       }).catch(() => {});
     } catch {}
@@ -656,6 +668,7 @@ export default function App() {
       fetch('/api/sync/agenda', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ appointments: newAppts }),
       }).catch(() => {});
     } catch {}
@@ -1278,6 +1291,7 @@ export default function App() {
         onLogout={() => {
           localStorage.removeItem('auth_session_token');
           localStorage.removeItem('auth_user_email');
+          fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
           setIsAuthenticated(false);
         }}
       />

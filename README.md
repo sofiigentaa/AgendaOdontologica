@@ -11,7 +11,9 @@ Código de trabajo: [`Escritorio/Proyectos Personales/Agenda/mi-agenda(8)`](Escr
 
 - [Documento funcional](DOCUMENTO-FUNCIONAL.md)
 - [Manual de casos de uso](MANUAL-CASOS-DE-USO.md)
-- [Testing](Escritorio/Proyectos%20Personales/Agenda/mi-agenda(8)/TESTING.md)
+- [Cómo correr los tests](COMO-CORRER-TESTS.md)
+- [Base de datos y sync PC + celular](BD-Y-SINCRONIZACION.md)
+- [Testing técnico](Escritorio/Proyectos%20Personales/Agenda/mi-agenda(8)/TESTING.md)
 
 ## Funcionalidades
 

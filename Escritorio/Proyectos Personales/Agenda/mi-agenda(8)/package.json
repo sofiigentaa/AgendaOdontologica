@@ -13,7 +13,9 @@
     "test": "vitest run --pool=forks --maxWorkers=1",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:prod": "PLAYWRIGHT_BASE_URL=https://agendaodontologica-cuvt.onrender.com playwright test"
+    "test:e2e:prod": "PLAYWRIGHT_BASE_URL=https://agendaodontologica-cuvt.onrender.com playwright test",
+    "test:e2e:cypress": "cypress run --e2e",
+    "test:e2e:selenium": "node e2e/selenium/critical-flows.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -47,6 +49,8 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
     "vitest": "^3.2.4",
-    "@playwright/test": "^1.55.0"
+    "@playwright/test": "^1.55.0",
+    "cypress": "^14.5.4",
+    "selenium-webdriver": "^4.35.0"
   }
 }

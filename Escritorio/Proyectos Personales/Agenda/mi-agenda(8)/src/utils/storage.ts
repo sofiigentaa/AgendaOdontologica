@@ -309,6 +309,7 @@ export function clearAllAgendaData(): void {
   fetch('/api/db/clear', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ target: 'all' }),
   }).catch((err) => console.warn('Error clearing cloud DB:', err));
 }
@@ -327,6 +328,7 @@ export function clearAppointmentsOnly(): void {
   fetch('/api/db/clear', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ target: 'appointments_only' }),
   }).catch((err) => console.warn('Error clearing appointments in cloud DB:', err));
 }
@@ -345,6 +347,7 @@ export function clearRemindersOnly(): void {
   fetch('/api/db/clear', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ target: 'reminders_only' }),
   }).catch((err) => console.warn('Error clearing reminders in cloud DB:', err));
 }
@@ -365,6 +368,7 @@ export async function syncToCloudDatabase(data: {
     await fetch('/api/sync/agenda', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         ...data,
         lastUpdated: new Date().toISOString(),
@@ -386,7 +390,7 @@ export async function fetchFromCloudDatabase(): Promise<{
 } | null> {
   // 1. Fetch from unified cross-device server endpoint
   try {
-    const res = await fetch('/api/sync/agenda');
+    const res = await fetch('/api/sync/agenda', { credentials: 'include' });
     if (res.ok) {
       const json = await res.json();
       if (json && json.success && json.data) {

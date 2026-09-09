@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { db, schema, isDbConfigured } from './src/db/index.ts';
@@ -24,6 +25,78 @@ function isAdminRequest(req: express.Request): boolean {
   }
   return !isProduction();
 }
+
+const SESSION_COOKIE = 'agenda_session';
+
+function sessionSecret() {
+  return process.env.ADMIN_API_TOKEN || process.env.CONSULTORIO_PASSWORD || 'dev-session-secret';
+}
+
+function allowedConsultorioPassword(): string {
+  if (process.env.CONSULTORIO_PASSWORD) return process.env.CONSULTORIO_PASSWORD;
+  return isProduction() ? '' : 'admin123';
+}
+
+function signSession(email: string): string {
+  const payload = Buffer.from(JSON.stringify({ email, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString('base64url');
+  const sig = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex');
+  return `${payload}.${sig}`;
+}
+
+function readSession(req: express.Request): { email: string } | null {
+  const raw = (req.headers.cookie || '')
+    .split(';')
+    .map((p) => p.trim())
+    .find((c) => c.startsWith(`${SESSION_COOKIE}=`));
+  if (!raw) return null;
+  const token = decodeURIComponent(raw.slice(SESSION_COOKIE.length + 1));
+  const [payload, sig] = token.split('.');
+  if (!payload || !sig) return null;
+  const expected = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex');
+  if (sig !== expected) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!data.exp || data.exp < Date.now()) return null;
+    return { email: data.email };
+  } catch {
+    return null;
+  }
+}
+
+function requireSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (readSession(req)) return next();
+  return res.status(401).json({ success: false, error: 'No autorizado' });
+}
+
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, dbAvailable: isDbConfigured });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '').trim();
+  const expected = allowedConsultorioPassword();
+  if (!email.includes('@') || !expected || password !== expected) {
+    return res.status(401).json({ success: false, error: 'Email o contraseña incorrectos' });
+  }
+  const token = signSession(email);
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax${isProduction() ? '; Secure' : ''}`
+  );
+  return res.json({ success: true, email });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const session = readSession(req);
+  if (!session) return res.json({ authenticated: false });
+  return res.json({ authenticated: true, email: session.email });
+});
+
+app.post('/api/auth/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+  res.json({ success: true });
+});
 
 // In-memory Shared Store for zero-quota sub-50ms multi-device synchronization
 let sharedAgendaStore: {
@@ -376,7 +449,7 @@ function broadcastToSSEClients(eventData: any) {
 }
 
 // SSE Live Stream Endpoint (instant push to PC & mobile clients)
-app.get('/api/sync/events', (req, res) => {
+app.get('/api/sync/events', requireSession, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
@@ -414,7 +487,7 @@ app.get('/api/sync/events', (req, res) => {
 });
 
 // Unified Cross-Device Sync API Endpoints
-app.get('/api/sync/agenda', async (req, res) => {
+app.get('/api/sync/agenda', requireSession, async (req, res) => {
   const insuranceFiles = Array.from(sharedInsuranceFilesMap.values());
   res.json({
     success: true,
@@ -425,7 +498,7 @@ app.get('/api/sync/agenda', async (req, res) => {
   });
 });
 
-app.post('/api/sync/agenda', (req, res) => {
+app.post('/api/sync/agenda', requireSession, (req, res) => {
   try {
     const payload = req.body || {};
     
@@ -475,12 +548,12 @@ app.post('/api/sync/agenda', (req, res) => {
 });
 
 // Dedicated endpoints for full insurance file upload & management
-app.get('/api/sync/insurance-files', (req, res) => {
+app.get('/api/sync/insurance-files', requireSession, (req, res) => {
   const files = Array.from(sharedInsuranceFilesMap.values());
   res.json({ success: true, files });
 });
 
-app.post('/api/sync/insurance-file', (req, res) => {
+app.post('/api/sync/insurance-file', requireSession, (req, res) => {
   try {
     const file = req.body;
     if (file && file.id) {
@@ -527,7 +600,7 @@ app.post('/api/sync/insurance-file', (req, res) => {
   }
 });
 
-app.delete('/api/sync/insurance-file/:id', (req, res) => {
+app.delete('/api/sync/insurance-file/:id', requireSession, (req, res) => {
   try {
     const { id } = req.params;
     sharedInsuranceFilesMap.delete(id);

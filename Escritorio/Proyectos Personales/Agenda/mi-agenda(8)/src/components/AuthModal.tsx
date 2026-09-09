@@ -11,35 +11,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    // Clean credentials
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = password.trim();
 
-    // Verificación de credenciales de odontóloga / consultorio
-    const isDoctorEmail = cleanEmail.includes('@') || cleanEmail.length > 2;
-    const isValidPass = cleanPass === 'admin123' || cleanPass === 'consultorio2026' || cleanPass === 'odontologia2026' || cleanPass.length >= 4;
-
-    if (isDoctorEmail && isValidPass) {
-      setTimeout(() => {
-        try {
-          localStorage.setItem('auth_session_token', 'active');
-          localStorage.setItem('auth_user_email', cleanEmail || 'sofiigenta@gmail.com');
-        } catch (storageErr) {
-          console.warn('Storage warning:', storageErr);
-        }
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: cleanEmail, password: cleanPass }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
         setLoading(false);
-        onLoginSuccess(cleanEmail || 'sofiigenta@gmail.com');
-      }, 300);
-    } else {
-      setTimeout(() => {
-        setLoading(false);
-        setError('Por favor ingresa un email y una contraseña válida.');
-      }, 300);
+        setError(data.error || 'Email o contraseña incorrectos');
+        return;
+      }
+      localStorage.setItem('auth_session_token', 'active');
+      localStorage.setItem('auth_user_email', data.email || cleanEmail);
+      setLoading(false);
+      onLoginSuccess(data.email || cleanEmail);
+    } catch {
+      setLoading(false);
+      setError('No se pudo conectar con el servidor. Probá de nuevo.');
     }
   };
 
