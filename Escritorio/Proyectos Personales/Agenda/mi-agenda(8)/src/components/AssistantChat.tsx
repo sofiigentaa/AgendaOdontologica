@@ -239,6 +239,7 @@ export const AssistantChat: React.FC<AssistantChatProps> = ({
       const res = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           messages: payloadMessages,
           agendaContext,

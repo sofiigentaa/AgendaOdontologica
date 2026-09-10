@@ -1700,6 +1700,7 @@ ${cancelUrl}
                               fetch('/api/sync/agenda', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
                                 body: JSON.stringify({
                                   appointments: [selectedApptDetail],
                                   contacts: [contact],
@@ -1711,6 +1712,7 @@ ${cancelUrl}
                             try {
                               await fetch(`/api/appointment/${selectedApptDetail.id}/mark-reminder-sent`, {
                                 method: 'POST',
+                                credentials: 'include',
                               });
                               setSelectedApptDetail((prev: any) => ({
                                 ...prev,

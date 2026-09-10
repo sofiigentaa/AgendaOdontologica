@@ -39,9 +39,7 @@ npm run dev
 ```
 
 Abrí [http://localhost:3000](http://localhost:3000).  
-Email cualquiera y contraseña `admin123`.
-
-Variables opcionales (`.env.example` → `.env.local`): `GEMINI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. En el servidor: `DATABASE_URL`, `ADMIN_API_TOKEN`.
+Email cualquiera y contraseña `admin123` **solo en local**. En Render hace falta `CONSULTORIO_PASSWORD` + `SESSION_SECRET` (ver [BD-Y-SINCRONIZACION.md](BD-Y-SINCRONIZACION.md)).
 
 ## Tests automatizados
 

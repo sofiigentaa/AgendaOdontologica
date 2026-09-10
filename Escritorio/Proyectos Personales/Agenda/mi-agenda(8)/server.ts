@@ -11,25 +11,57 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_FILE_PATH = path.join(process.cwd(), 'agenda_storage.json');
 
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ limit: '25mb', extended: true }));
+
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (isProduction()) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
 
 function isProduction() {
   return process.env.NODE_ENV === 'production';
 }
 
+function publicError(fallback: string, error?: { message?: string }) {
+  if (isProduction()) return fallback;
+  return error?.message || fallback;
+}
+
 function isAdminRequest(req: express.Request): boolean {
   const token = process.env.ADMIN_API_TOKEN;
-  if (token) {
-    return req.get('x-admin-token') === token;
+  if (!token) {
+    return !isProduction();
   }
-  return !isProduction();
+  const given = req.get('x-admin-token') || '';
+  return timingSafeStringEqual(given, token);
 }
 
 const SESSION_COOKIE = 'agenda_session';
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) {
+    crypto.timingSafeEqual(bb, bb);
+    return false;
+  }
+  return crypto.timingSafeEqual(ba, bb);
+}
 
 function sessionSecret() {
-  return process.env.ADMIN_API_TOKEN || process.env.CONSULTORIO_PASSWORD || 'dev-session-secret';
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  if (isProduction()) return '';
+  return 'dev-session-secret';
 }
 
 function allowedConsultorioPassword(): string {
@@ -37,13 +69,46 @@ function allowedConsultorioPassword(): string {
   return isProduction() ? '' : 'admin123';
 }
 
+function emailAllowed(email: string): boolean {
+  const raw = (process.env.CONSULTORIO_EMAIL || '').trim();
+  if (!raw) return true;
+  const allowed = raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return allowed.includes(email);
+}
+
+function clientIp(req: express.Request): string {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || req.socket.remoteAddress || 'unknown';
+}
+
+function tooManyFailedLogins(ip: string): boolean {
+  const now = Date.now();
+  const row = loginAttempts.get(ip);
+  if (!row || now > row.resetAt) {
+    loginAttempts.delete(ip);
+    return false;
+  }
+  return row.count >= 8;
+}
+
+function recordFailedLogin(ip: string) {
+  const now = Date.now();
+  const row = loginAttempts.get(ip);
+  if (!row || now > row.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return;
+  }
+  row.count += 1;
+}
+
 function signSession(email: string): string {
-  const payload = Buffer.from(JSON.stringify({ email, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ email, exp: Date.now() + 12 * 60 * 60 * 1000 })).toString('base64url');
   const sig = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex');
   return `${payload}.${sig}`;
 }
 
 function readSession(req: express.Request): { email: string } | null {
+  if (!sessionSecret()) return null;
   const raw = (req.headers.cookie || '')
     .split(';')
     .map((p) => p.trim())
@@ -53,7 +118,7 @@ function readSession(req: express.Request): { email: string } | null {
   const [payload, sig] = token.split('.');
   if (!payload || !sig) return null;
   const expected = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex');
-  if (sig !== expected) return null;
+  if (!timingSafeStringEqual(sig, expected)) return null;
   try {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     if (!data.exp || data.exp < Date.now()) return null;
@@ -68,21 +133,62 @@ function requireSession(req: express.Request, res: express.Response, next: expre
   return res.status(401).json({ success: false, error: 'No autorizado' });
 }
 
+function assertProductionSecrets() {
+  if (!isProduction()) return;
+  const password = process.env.CONSULTORIO_PASSWORD || '';
+  const secret = process.env.SESSION_SECRET || '';
+  if (password.length < 12) {
+    console.error('Producción: CONSULTORIO_PASSWORD debe tener al menos 12 caracteres. El servidor no arranca.');
+    process.exit(1);
+  }
+  if (secret.length < 32) {
+    console.error('Producción: SESSION_SECRET debe tener al menos 32 caracteres aleatorios. El servidor no arranca.');
+    process.exit(1);
+  }
+}
+
+function supabaseEnv() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return { url, key };
+}
+
+function patchSupabaseAppointment(id: string, body: Record<string, unknown>) {
+  const sb = supabaseEnv();
+  if (!sb) return;
+  fetch(`${sb.url}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: sb.key,
+      Authorization: `Bearer ${sb.key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, dbAvailable: isDbConfigured });
 });
 
 app.post('/api/auth/login', (req, res) => {
+  const ip = clientIp(req);
+  if (tooManyFailedLogins(ip)) {
+    return res.status(429).json({ success: false, error: 'Demasiados intentos. Esperá 15 minutos.' });
+  }
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '').trim();
   const expected = allowedConsultorioPassword();
-  if (!email.includes('@') || !expected || password !== expected) {
+  if (!email.includes('@') || !expected || !emailAllowed(email) || !timingSafeStringEqual(password, expected)) {
+    recordFailedLogin(ip);
     return res.status(401).json({ success: false, error: 'Email o contraseña incorrectos' });
   }
   const token = signSession(email);
   res.setHeader(
     'Set-Cookie',
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax${isProduction() ? '; Secure' : ''}`
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict${isProduction() ? '; Secure' : ''}`
   );
   return res.json({ success: true, email });
 });
@@ -626,10 +732,7 @@ app.delete('/api/sync/insurance-file/:id', requireSession, (req, res) => {
 });
 
 // Clear / Wipe Database API Endpoints
-app.post('/api/db/clear', async (req, res) => {
-  if (!isAdminRequest(req)) {
-    return res.status(403).json({ success: false, error: 'No autorizado' });
-  }
+app.post('/api/db/clear', requireSession, async (req, res) => {
   try {
     const { target } = req.body;
     
@@ -713,7 +816,7 @@ app.get('/api/db/all', async (req, res) => {
   }
 });
 
-app.post('/api/db/sync', async (req, res) => {
+app.post('/api/db/sync', requireSession, async (req, res) => {
   try {
     await persistToCloudSql(req.body);
     return res.json({ success: true, dbAvailable: true });
@@ -760,15 +863,13 @@ app.get('/api/public/appointment/:id', async (req, res) => {
       }
     }
 
-    // Fallback 2: Query Supabase REST API directly
-    if (!appt) {
+    const sb = supabaseEnv();
+    if (!appt && sb) {
       try {
-        const sbUrl = 'https://xdrvhkmritmcgyquynov.supabase.co';
-        const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkcnZoa21yaXRtY2d5cXV5bm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNDE0MTksImV4cCI6MjEwMjgxNzQxOX0.OSg3ZtpNfFxJxh-ytF3t2XrpfFfHjITd2s6r16y7mMk';
-        const sbRes = await fetch(`${sbUrl}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}&select=*`, {
+        const sbRes = await fetch(`${sb.url}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}&select=*`, {
           headers: {
-            'apikey': sbKey,
-            'Authorization': `Bearer ${sbKey}`,
+            apikey: sb.key,
+            Authorization: `Bearer ${sb.key}`,
           },
         });
         if (sbRes.ok) {
@@ -789,12 +890,12 @@ app.get('/api/public/appointment/:id', async (req, res) => {
               dentist: row.dentist || row.title || rawNotes.dentist || 'Marie',
               treatment: row.treatment || row.motive || rawNotes.motive || '',
               whatsappStatus: row.whatsapp_status || row.whatsappStatus || rawNotes.whatsappStatus || 'pending',
-              whatsappLastReply: row.whatsapp_last_reply || row.whatsappLastReply || null,
+              whatsappLastReply: rawNotes.whatsappLastReply || null,
             };
             const contactId = row.contact_id || row.contactId || rawNotes.contactId;
             if (contactId) {
-              const cRes = await fetch(`${sbUrl}/rest/v1/contacts?id=eq.${encodeURIComponent(contactId)}&select=*`, {
-                headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` },
+              const cRes = await fetch(`${sb.url}/rest/v1/contacts?id=eq.${encodeURIComponent(contactId)}&select=full_name,fullName`, {
+                headers: { apikey: sb.key, Authorization: `Bearer ${sb.key}` },
               });
               if (cRes.ok) {
                 const cData = await cRes.json();
@@ -825,7 +926,7 @@ app.get('/api/public/appointment/:id', async (req, res) => {
       lastUpdated: appt.whatsappLastReply || null,
     });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Error al obtener datos del turno' });
+    return res.status(500).json({ error: publicError('Error al obtener datos del turno', error) });
   }
 });
 
@@ -926,26 +1027,12 @@ app.post('/api/public/appointment/:id/respond', async (req, res) => {
         }
       }
 
-      // 4. Persist to Supabase REST API in background
-      try {
-        const sbUrl = 'https://xdrvhkmritmcgyquynov.supabase.co';
-        const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkcnZoa21yaXRtY2d5cXV5bm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNDE0MTksImV4cCI6MjEwMjgxNzQxOX0.OSg3ZtpNfFxJxh-ytF3t2XrpfFfHjITd2s6r16y7mMk';
-        fetch(`${sbUrl}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}`, {
-          method: 'PATCH',
-          headers: {
-            'apikey': sbKey,
-            'Authorization': `Bearer ${sbKey}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal',
-          },
-          body: JSON.stringify({
-            status: 'cancelled',
-            color: '#ef4444',
-            whatsapp_status: 'cancelled',
-            whatsapp_last_reply: nowIso,
-          }),
-        }).catch(() => {});
-      } catch {}
+      patchSupabaseAppointment(id, {
+        status: 'cancelled',
+        color: '#ef4444',
+        whatsapp_status: 'cancelled',
+        whatsapp_last_reply: nowIso,
+      });
 
       return res.json({
         success: true,
@@ -1008,26 +1095,12 @@ app.post('/api/public/appointment/:id/respond', async (req, res) => {
       }
     }
 
-    // Persist confirmation to Supabase REST API in background
-    try {
-      const sbUrl = 'https://xdrvhkmritmcgyquynov.supabase.co';
-      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkcnZoa21yaXRtY2d5cXV5bm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNDE0MTksImV4cCI6MjEwMjgxNzQxOX0.OSg3ZtpNfFxJxh-ytF3t2XrpfFfHjITd2s6r16y7mMk';
-      fetch(`${sbUrl}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': sbKey,
-          'Authorization': `Bearer ${sbKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
-        body: JSON.stringify({
-          status: 'confirmed',
-          color: '#10b981',
-          whatsapp_status: 'confirmed',
-          whatsapp_last_reply: nowIso,
-        }),
-      }).catch(() => {});
-    } catch {}
+    patchSupabaseAppointment(id, {
+      status: 'confirmed',
+      color: '#10b981',
+      whatsapp_status: 'confirmed',
+      whatsapp_last_reply: nowIso,
+    });
 
     return res.json({
       success: true,
@@ -1035,11 +1108,11 @@ app.post('/api/public/appointment/:id/respond', async (req, res) => {
       message: 'Turno confirmado con éxito',
     });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Error al procesar respuesta' });
+    return res.status(500).json({ error: publicError('Error al procesar respuesta', error) });
   }
 });
 
-app.post('/api/appointment/:id/mark-reminder-sent', (req, res) => {
+app.post('/api/appointment/:id/mark-reminder-sent', requireSession, (req, res) => {
   try {
     const { id } = req.params;
     if (sharedAgendaStore.appointments) {
@@ -1065,7 +1138,7 @@ app.post('/api/appointment/:id/mark-reminder-sent', (req, res) => {
   }
 });
 
-app.delete('/api/appointment/:id', async (req, res) => {
+app.delete('/api/appointment/:id', requireSession, async (req, res) => {
   try {
     const { id } = req.params;
     if (sharedAgendaStore.appointments) {
@@ -1109,7 +1182,7 @@ const getGeminiClient = () => {
 };
 
 // API Endpoint for Assistant Chat
-app.post('/api/assistant/chat', async (req, res) => {
+app.post('/api/assistant/chat', requireSession, async (req, res) => {
   try {
     const { messages, agendaContext } = req.body;
 
@@ -1210,12 +1283,12 @@ ${contextText}`;
     console.error('Error in assistant chat API:', error);
     return res.status(500).json({
       error: 'Error al procesar la respuesta con el Asistente IA.',
-      details: error?.message || String(error),
     });
   }
 });
 
 async function startServer() {
+  assertProductionSecrets();
   loadFromDiskBackup();
   await initStoreFromDatabase();
 

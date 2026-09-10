@@ -802,7 +802,7 @@ export default function App() {
     const updated = appointments.filter((a) => a.id !== appointmentId);
     updateAppointments(updated);
     deleteAppointmentFromSupabase(appointmentId).catch(() => {});
-    fetch(`/api/appointment/${appointmentId}`, { method: 'DELETE' }).catch(() => {});
+    fetch(`/api/appointment/${appointmentId}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
     showToast('Turno eliminado del calendario');
   };
 

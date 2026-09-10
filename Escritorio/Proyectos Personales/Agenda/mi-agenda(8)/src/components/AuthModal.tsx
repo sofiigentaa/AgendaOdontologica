@@ -121,7 +121,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
         {/* Security badges */}
         <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-medium">
           <Shield className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Datos cifrados y protegidos con Supabase RLS</span>
+          <span>Acceso restringido al equipo del consultorio</span>
         </div>
       </div>
     </div>

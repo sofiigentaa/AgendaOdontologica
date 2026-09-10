@@ -1,44 +1,51 @@
-# Base de datos y uso PC + celular
+# Base de datos, sync y acceso
 
-El código **ya sabe hablar con PostgreSQL**. Falta crear la BD en Render y poner la URL.
+Nada es “100% seguro”. Con estos pasos sí se cierra el acceso público a pacientes y turnos.
 
-## Qué tenés que hacer en Render (15 min)
-
-1. [dashboard.render.com](https://dashboard.render.com) → **New** → **PostgreSQL**.
-2. Nombre: `agenda-odontologica-db`. Plan Free si existe.
-3. Cuando esté **Available**, copiá **Internal Database URL**.
-4. Abrí el **Web Service** `agendaodontologica-cuvt` → **Environment**.
-5. Agregá:
+## Obligatorio en Render (Environment)
 
 | Variable | Valor |
 | --- | --- |
-| `DATABASE_URL` | la Internal Database URL |
-| `CONSULTORIO_PASSWORD` | una clave larga, solo para el consultorio (no `admin123` en producción) |
 | `NODE_ENV` | `production` |
+| `CONSULTORIO_PASSWORD` | clave **larga** (≥ 12), distinta de `admin123`, solo Marie y Yani |
+| `SESSION_SECRET` | 32+ caracteres aleatorios (`openssl rand -hex 32`) |
+| `DATABASE_URL` | Internal Database URL del Postgres de Render |
+| `CONSULTORIO_EMAIL` | (recomendado) emails permitidos, separados por coma |
 
-6. En el web service, **Connect** / linking: vinculá el Postgres si Render lo ofrece.
-7. **Manual Deploy**.
+Sin `CONSULTORIO_PASSWORD` y `SESSION_SECRET` **el servidor no arranca** en producción.
 
-8. En tu PC, una vez (con la External Database URL de Render, o en un shell de Render):
+Nunca pongas estas variables en GitHub ni en el README.
+
+## Postgres (para que no se pierda al reiniciar)
+
+1. Render → **New** → **PostgreSQL**.
+2. Copiá **Internal Database URL** a `DATABASE_URL`.
+3. En tu PC (External URL) o shell de Render:
 
 ```bash
 cd "Escritorio/Proyectos Personales/Agenda/mi-agenda(8)"
 DATABASE_URL="postgresql://..." npm run db:push
 ```
 
-Eso crea las tablas (pacientes, turnos, etc.).
+4. **Manual Deploy** del web service.
 
 ## Cómo lo usan Marie y Yani
 
-1. Misma URL: https://agendaodontologica-cuvt.onrender.com  
-2. Mismo email del consultorio y la **misma** `CONSULTORIO_PASSWORD`.  
-3. PC y celular: al guardar un turno, se manda a `/api/sync/agenda` y queda en Postgres. El otro dispositivo lo ve al recargar o al pulsar **Sincronizar**.
+1. Misma URL del deploy.
+2. Email autorizado + `CONSULTORIO_PASSWORD`.
+3. La sesión dura 12 horas (cookie HttpOnly).
 
-## Login
+## Qué queda protegido
 
-- En local (sin variable): sigue valiendo `admin123` para los tests.  
-- En Render: **solo** la clave `CONSULTORIO_PASSWORD`. Cualquier email con `@`.
+- Login en el servidor (no alcanza con “cualquier clave de 4 letras”).
+- `/api/sync/*`, dump, borrar turnos, asistente: requieren sesión.
+- En producción, `admin123` **no funciona**.
+- Máximo 8 intentos de login cada 15 minutos por IP.
+- Claves de Supabase ya no están en el código.
 
-## Si no creás la BD
+## Qué no cubre el código
 
-Siguen pudiendo usar **una sola PC**. El sync entre celu y PC **no es fiable** (se pierde al reiniciar Render).
+- Si publicás la URL y alguien adivina o filtra la clave, entra.
+- Los datos en el celular/PC siguen en `localStorage` de ese navegador.
+- El link público de confirmar turno (`/api/public/appointment/:id`) sigue existiendo a propósito (WhatsApp del paciente).
+- Tenés que **rotar** la clave de Supabase si alguna vez estuvo en GitHub.
