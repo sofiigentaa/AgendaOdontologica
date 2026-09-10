@@ -75,7 +75,4 @@ Permitir al equipo del consultorio:
 - Auditoría de quién modificó un turno
 - Copias de seguridad automáticas en la nube confiables
 
-## 9. Conclusión de uso real
 
-El sistema **sí sirve** para demos, portfolio y prueba en **un solo dispositivo**.  
-**No está listo** para que el consultorio cargue pacientes reales en varios celulares/PCs como sistema oficial (ver README y la nota de sincronización).

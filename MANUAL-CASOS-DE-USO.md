@@ -157,8 +157,4 @@ Precondición común: haber ingresado al sistema (email + contraseña de demo).
 
 ---
 
-## Casos que hoy no cubre el sistema como producto clínico
 
-- Usuario único e intransferible por odontóloga
-- Recuperar la misma agenda en el celular de Yani y en la PC de recepción **de forma segura y garantizada**
-- Cumplir por sí solo con resguardo de historia clínica (Ley 25.326 / datos de salud)
