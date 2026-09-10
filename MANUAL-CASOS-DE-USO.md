@@ -1,4 +1,4 @@
-# Manual de casos de uso — Agenda Odontológica
+# Manual de casos de uso - Agenda Odontológica
 
 Actor principal: personal del consultorio (Marie, Yani o recepción).  
 Precondición común: haber ingresado al sistema (email + contraseña de demo).
