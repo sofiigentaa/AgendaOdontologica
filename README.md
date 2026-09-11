@@ -1,35 +1,27 @@
-# Agenda Odontológica - Consultorio Marie & Yani
+# Agenda Odontológica — Consultorio Marie & Yani
 
-Aplicación web para gestionar **pacientes, turnos, ficha clínica y liquidación diaria** de un consultorio odontológico con dos odontólogas.
+Agenda web para un consultorio con dos odontólogas: pacientes, turnos, ficha clínica y liquidación diaria.
 
 **Demo:** [https://agendaodontologica-cuvt.onrender.com](https://agendaodontologica-cuvt.onrender.com)
 
-Código de trabajo: [`Escritorio/Proyectos Personales/Agenda/mi-agenda(8)`](Escritorio/Proyectos%20Personales/Agenda/mi-agenda(8))  
-(las carpetas `mi-agenda(2)` a `(7)` son copias históricas)
-
-## Documentación
-
-- [Documento funcional](DOCUMENTO-FUNCIONAL.md)
-- [Manual de casos de uso](MANUAL-CASOS-DE-USO.md)
-- [Cómo correr los tests](COMO-CORRER-TESTS.md)
-- [Base de datos y sync PC + celular](BD-Y-SINCRONIZACION.md)
-- [Testing técnico](Escritorio/Proyectos%20Personales/Agenda/mi-agenda(8)/TESTING.md)
-
-## Funcionalidades
-
-- Alta, búsqueda y filtros de pacientes (obra social / particular)
-- Calendario de turnos (vista mes y lista) con detección de colisiones
-- Ficha médica: notas, recordatorios y archivos
-- Finanzas y liquidación Marie / Yani / ambas
-- Backup JSON y TXT de contingencia
-- Login de consultorio (demo), WhatsApp y asistente IA opcionales
+Versión de trabajo: `Escritorio/Proyectos Personales/Agenda/mi-agenda(8)`
 
 ## Stack
 
-React 19, Vite, Express, Tailwind.  
-Persistencia principal: **localStorage**. El deploy en Render **no usa PostgreSQL**; los datos quedan en el navegador.
+React 19 + Vite + Express + Tailwind. Persistencia principal: **localStorage** del navegador. Opcional: archivo en el servidor, Supabase, Firebase/Google y PostgreSQL (Drizzle) si hay variables de entorno.
 
-## Instalación y ejecución
+El deploy actual en Render **no tiene PostgreSQL conectado** (`/api/db/all` responde `dbAvailable: false`). Los datos viven en el browser de cada dispositivo. Si Render reinicia el servicio, el archivo `agenda_storage.json` del servidor se pierde.
+
+## Funcionalidades
+
+- Pacientes (alta, filtros, vCard)
+- Calendario y turnos con colisiones
+- Notas, recordatorios y archivos
+- Finanzas Marie / Yani / ambas
+- Backup JSON y TXT de contingencia
+- Login de consultorio (demo) y WhatsApp / IA opcionales
+
+## Instalación
 
 ```bash
 cd "Escritorio/Proyectos Personales/Agenda/mi-agenda(8)"
@@ -38,21 +30,18 @@ npx playwright install chromium
 npm run dev
 ```
 
-Abrí [http://localhost:3000](http://localhost:3000).  
-Email cualquiera y contraseña `admin123` **solo en local**. En Render hace falta `CONSULTORIO_PASSWORD` + `SESSION_SECRET` (ver [BD-Y-SINCRONIZACION.md](BD-Y-SINCRONIZACION.md)).
+Abrí http://localhost:3000 — email cualquiera y contraseña `admin123`.
 
-## Tests automatizados
+Variables opcionales: copiá `.env.example` a `.env.local` (`GEMINI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). En el servidor: `DATABASE_URL` (Postgres), `ADMIN_API_TOKEN` (protege wipe de datos).
+
+## Tests
 
 ```bash
-npm test              # 35 tests de lógica (Vitest)
-npm run test:e2e      # flujos de UI (Playwright)
-npm run test:e2e:prod # mismos flujos contra Render (no crea pacientes)
-npm run lint
-npm run build
+npm test                 # lógica (Vitest)
+npm run test:e2e         # interfaz local (Playwright)
+npm run test:e2e:prod    # interfaz contra Render (no crea pacientes)
+npm run lint             # TypeScript
+npm run build            # build de producción
 ```
 
-Detalle: [TESTING.md](Escritorio/Proyectos%20Personales/Agenda/mi-agenda(8)/TESTING.md)
-
-## Deploy
-
-Render: [agendaodontologica-cuvt.onrender.com](https://agendaodontologica-cuvt.onrender.com)
+Detalle: [TESTING.md](./TESTING.md)
