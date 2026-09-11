@@ -1,6 +1,7 @@
+}}{}
+cat > src/components/PatientConfirmationView.tsx << 'ENDOFFILE'
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Calendar, Clock, User, Sparkles, ShieldCheck } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { CheckCircle2, XCircle, Calendar, Clock, User, Sparkles, ShieldCheck, MessageSquare, ArrowRight, RotateCcw } from 'lucide-react';
 
 interface PatientConfirmationViewProps {
   appointmentId: string;
@@ -25,7 +26,7 @@ export const PatientConfirmationView: React.FC<PatientConfirmationViewProps> = (
         setLoading(true);
         let apptData: any = null;
 
-        // 1. Try server endpoint
+        // 1. Try server endpoint (ya resuelve fallback a Postgres y a Supabase del lado del servidor)
         try {
           const res = await fetch(`/api/public/appointment/${appointmentId}`);
           if (res.ok) {
@@ -35,52 +36,11 @@ export const PatientConfirmationView: React.FC<PatientConfirmationViewProps> = (
           console.warn('Server public endpoint error:', e);
         }
 
-        // 2. If not found on server, query Supabase directly
+        // 2. Fallback to localStorage if accessed on same device
         if (!apptData) {
           try {
-            const { data: sbAppts } = await supabase
-              .from('appointments')
-              .select('*')
-              .eq('id', appointmentId)
-              .limit(1);
-
-            if (sbAppts && sbAppts.length > 0) {
-              const row = sbAppts[0];
-              let contactName = row.contact_name || 'Paciente';
-              const contactId = row.contact_id || row.contactId;
-              
-              if (contactId) {
-                const { data: sbContacts } = await supabase
-                  .from('contacts')
-                  .select('full_name, fullName')
-                  .eq('id', contactId)
-                  .limit(1);
-                if (sbContacts && sbContacts.length > 0) {
-                  contactName = sbContacts[0].full_name || sbContacts[0].fullName || contactName;
-                }
-              }
-
-              apptData = {
-                id: row.id,
-                patientName: contactName,
-                date: row.date || '',
-                time: row.time || '',
-                dentist: row.dentist || row.title || 'Marie',
-                treatment: row.treatment || row.motive || '',
-                whatsappStatus: row.whatsapp_status || row.whatsappStatus || 'pending',
-                lastUpdated: row.whatsapp_last_reply || null,
-              };
-            }
-          } catch (sbErr) {
-            console.warn('Supabase direct lookup error:', sbErr);
-          }
-        }
-
-        // 3. Fallback to localStorage if accessed on same device
-        if (!apptData) {
-          try {
-            const stored = localStorage.getItem('mi_agenda_appointments_v4');
-            const storedContacts = localStorage.getItem('mi_agenda_contacts_v4');
+            const stored = localStorage.getItem('mi_agenda_appointments_v6');
+            const storedContacts = localStorage.getItem('mi_agenda_contacts_v6');
             if (stored) {
               const apptsList = JSON.parse(stored);
               const found = apptsList.find((a: any) => a.id === appointmentId);
@@ -189,7 +149,7 @@ export const PatientConfirmationView: React.FC<PatientConfirmationViewProps> = (
     const targetStatus = action === 'confirm' ? 'confirmed' : 'cancelled';
     const nowIso = new Date().toISOString();
 
-    // 1. Notify server endpoint
+    // Notify server endpoint (el servidor actualiza la base de datos)
     try {
       await fetch(`/api/public/appointment/${appointmentId}/respond`, {
         method: 'POST',
@@ -200,68 +160,15 @@ export const PatientConfirmationView: React.FC<PatientConfirmationViewProps> = (
       console.warn('Server respond error:', e);
     }
 
-    // 2. Synchronize directly with Supabase
+    // Update localStorage if exists on client
     try {
-      const { data: existingRows } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('id', appointmentId)
-        .limit(1);
-
-      let existingObj: any = {};
-      if (existingRows && existingRows.length > 0 && existingRows[0].notes) {
-        try {
-          if (typeof existingRows[0].notes === 'string' && existingRows[0].notes.startsWith('{')) {
-            existingObj = JSON.parse(existingRows[0].notes);
-          }
-        } catch {}
-      }
-
-      const mergedNotes = JSON.stringify({
-        ...existingObj,
-        ...(currentAppt || {}),
-        id: appointmentId,
-        whatsappStatus: targetStatus,
-        whatsappLastReply: nowIso,
-        status: targetStatus,
-      });
-
-      const fullUpdate = {
-        status: targetStatus,
-        notes: mergedNotes,
-        color: targetStatus === 'confirmed' ? '#10b981' : targetStatus === 'cancelled' ? '#ef4444' : '#3b82f6',
-        whatsapp_status: targetStatus,
-        whatsapp_last_reply: nowIso,
-      };
-
-      const updateRes = await supabase
-        .from('appointments')
-        .update(fullUpdate)
-        .eq('id', appointmentId);
-
-      if (updateRes.error) {
-        await supabase
-          .from('appointments')
-          .update({
-            status: targetStatus,
-            notes: mergedNotes,
-            color: targetStatus === 'confirmed' ? '#10b981' : targetStatus === 'cancelled' ? '#ef4444' : '#3b82f6',
-          })
-          .eq('id', appointmentId);
-      }
-    } catch (sbErr) {
-      console.warn('Supabase respond update error:', sbErr);
-    }
-
-    // 3. Update localStorage if exists on client
-    try {
-      const stored = localStorage.getItem('mi_agenda_appointments_v4');
+      const stored = localStorage.getItem('mi_agenda_appointments_v6');
       if (stored) {
         let appts = JSON.parse(stored);
         appts = appts.map((a: any) =>
           a.id === appointmentId ? { ...a, whatsappStatus: targetStatus, whatsappLastReply: nowIso } : a
         );
-        localStorage.setItem('mi_agenda_appointments_v4', JSON.stringify(appts));
+        localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(appts));
       }
     } catch {}
 
@@ -408,56 +315,64 @@ export const PatientConfirmationView: React.FC<PatientConfirmationViewProps> = (
 
           {/* Status Message Box */}
           {status === 'confirmed' && (
-            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-center space-y-1 animate-in fade-in duration-300">
-              <p className="text-sm font-extrabold text-emerald-900">
-                ¡Gracias por confirmar tu turno! 🦷
-              </p>
-              <p className="text-xs font-bold text-emerald-900">
-                Tu asistencia quedó registrada con éxito.
-              </p>
-              <p className="text-[11px] text-emerald-700">
-                Te esperamos en el consultorio. Si te surge algún imprevisto, avísanos con anticipación.
+            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-center space-y-2 animate-in fade-in duration-300">
+              <div className="flex items-center justify-center gap-1.5 text-emerald-800 font-extrabold text-sm">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>¡Asistencia Confirmada!</span>
+              </div>
+              <p className="text-xs text-emerald-700 leading-relaxed">
+                Muchas gracias por avisarnos. Tu lugar está reservado en el consultorio. Te recomendamos llegar 5 minutos antes de tu horario.
               </p>
             </div>
           )}
 
           {status === 'cancelled' && (
-            <div className="p-4 bg-slate-100 rounded-2xl border border-slate-200 text-center space-y-1.5 animate-in fade-in duration-300">
-              <p className="text-sm font-extrabold text-slate-900">
-                Gracias por avisarnos 🙏
-              </p>
-              <p className="text-xs font-extrabold text-slate-900">
-                Tu turno fue cancelado y el horario ha quedado libre.
-              </p>
-              <p className="text-[11px] text-slate-600">
-                Si deseas reprogramar o pedir un nuevo turno, escribe directamente por WhatsApp al consultorio.
+            <div className="p-4 bg-rose-50/80 rounded-2xl border border-rose-200 text-center space-y-2 animate-in fade-in duration-300">
+              <div className="flex items-center justify-center gap-1.5 text-rose-800 font-extrabold text-sm">
+                <XCircle className="w-4 h-4 text-rose-600" />
+                <span>Turno Cancelado con Éxito</span>
+              </div>
+              <p className="text-xs text-rose-700 leading-relaxed">
+                El horario ha quedado liberado en la agenda del consultorio. Si deseas reprogramar o coordinar una nueva cita, puedes comunicarte por WhatsApp.
               </p>
             </div>
           )}
 
           {/* Manual Switch Buttons */}
-          <div className="pt-2 flex flex-col gap-2">
+          <div className="pt-2 flex flex-col gap-2.5">
             {status !== 'confirmed' && (
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleManualAction('confirm')}
-                className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <CheckCircle2 className="w-5 h-5" />
-                <span>Confirmar mi Asistencia</span>
+                <span>{isSubmitting ? 'Procesando...' : 'Confirmar mi Asistencia'}</span>
               </button>
             )}
 
-            {status !== 'cancelled' && (
+            {status === 'confirmed' && (
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => handleManualAction('cancel')}
-                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 active:scale-98 rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 active:scale-98 rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <XCircle className="w-4 h-4" />
-                <span>No podré asistir (Cancelar Turno)</span>
+                <span>¿Tuviste un imprevisto? Cancelar turno</span>
+              </button>
+            )}
+
+            {status === 'cancelled' && (
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleManualAction('confirm')}
+                className="w-full py-2.5 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 active:scale-98 rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border border-emerald-200"
+              >
+                <RotateCcw className="w-4 h-4 text-emerald-600" />
+                <span>Volver a confirmar asistencia</span>
               </button>
             )}
           </div>
