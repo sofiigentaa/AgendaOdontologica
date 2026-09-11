@@ -188,6 +188,7 @@ export default function App() {
 
   // Authentication gate for dental team
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
 
   React.useEffect(() => {
     fetch('/api/auth/me', { credentials: 'include' })
@@ -200,7 +201,8 @@ export default function App() {
           setIsAuthenticated(false);
         }
       })
-      .catch(() => setIsAuthenticated(false));
+      .catch(() => setIsAuthenticated(false))
+      .finally(() => setAuthChecked(true));
   }, []);
 
   // Check if this is a patient accessing a 1-click confirmation / cancellation link
@@ -1233,6 +1235,14 @@ export default function App() {
 
   if (patientConfirmId) {
     return <PatientConfirmationView appointmentId={patientConfirmId} initialAction={patientAction} />;
+  }
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin"></div>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
