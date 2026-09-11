@@ -609,6 +609,17 @@ app.post('/api/sync/agenda', requireSession, (req, res) => {
     const payload = req.body || {};
     
     if (Array.isArray(payload.insuranceFiles)) {
+      // Tratamos el array recibido como la lista completa y autoritativa:
+      // primero borramos del mapa cualquier archivo que ya no esté presente
+      // (esto es lo que faltaba: sin esto, un archivo borrado en el cliente
+      // nunca se borraba del lado del servidor y volvia a aparecer).
+      const incomingIds = new Set(payload.insuranceFiles.filter((f: any) => f && f.id).map((f: any) => f.id));
+      for (const existingId of Array.from(sharedInsuranceFilesMap.keys())) {
+        if (!incomingIds.has(existingId)) {
+          sharedInsuranceFilesMap.delete(existingId);
+        }
+      }
+
       for (const f of payload.insuranceFiles) {
         if (f && f.id) {
           const existing = sharedInsuranceFilesMap.get(f.id);
@@ -1312,4 +1323,3 @@ async function startServer() {
 }
 
 startServer();
-
