@@ -1,5 +1,3 @@
-}}{}
-cat > src/components/PatientConfirmationView.tsx << 'ENDOFFILE'
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, Calendar, Clock, User, Sparkles, ShieldCheck, MessageSquare, ArrowRight, RotateCcw } from 'lucide-react';
 
