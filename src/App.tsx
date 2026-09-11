@@ -67,7 +67,7 @@ import {
   deleteAppointmentFromSupabase,
   deleteReminderFromSupabase,
   clearRemindersFromSupabase
-} from './utils/supabaseSync';
+} from './utils/backendSync';
 import { 
   Users, 
   UserPlus, 
