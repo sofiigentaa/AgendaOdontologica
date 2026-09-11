@@ -87,6 +87,13 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
   const [mecanicoDental, setMecanicoDental] = useState<number>(0);
   const [porcentajeHonorario, setPorcentajeHonorario] = useState<number>(50);
 
+  // Al elegir una sola odontóloga corresponde 100% de honorarios;
+  // al elegir "Ambas" se reparte 50% / 50%.
+  const handleDentistChange = (value: 'Yani' | 'Marie' | 'Ambas') => {
+    setDentist(value);
+    setPorcentajeHonorario(value === 'Ambas' ? 50 : 100);
+  };
+
   const [conflictAppointment, setConflictAppointment] = useState<{
     appointment: Appointment;
     patientName: string;
@@ -130,7 +137,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
         setEstampillas(0);
         setMateriales(0);
         setMecanicoDental(0);
-        setPorcentajeHonorario(50);
+        setPorcentajeHonorario(100); // por defecto arranca en "Marie" (una sola profesional)
       }
     } else if (isOpen) {
       // Modal was already open: check if a new contact was created (contacts array length grew)
@@ -409,7 +416,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
               <button
                 type="button"
                 data-testid="dentist-marie"
-                onClick={() => setDentist('Marie')}
+                onClick={() => handleDentistChange('Marie')}
                 className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center transition-all text-center ${
                   dentist === 'Marie'
                     ? 'bg-blue-50 border-blue-600 text-blue-900 shadow-sm ring-2 ring-blue-500/20'
@@ -425,7 +432,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
               <button
                 type="button"
-                onClick={() => setDentist('Yani')}
+                onClick={() => handleDentistChange('Yani')}
                 className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center transition-all text-center ${
                   dentist === 'Yani'
                     ? 'bg-emerald-50 border-emerald-600 text-emerald-900 shadow-sm ring-2 ring-emerald-500/20'
@@ -441,7 +448,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
               <button
                 type="button"
-                onClick={() => setDentist('Ambas')}
+                onClick={() => handleDentistChange('Ambas')}
                 className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center transition-all text-center ${
                   dentist === 'Ambas'
                     ? 'bg-purple-100 border-purple-600 text-purple-900 shadow-sm ring-2 ring-purple-500/20'
