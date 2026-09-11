@@ -1,4 +1,4 @@
-# Agenda Odontológica — Consultorio Marie & Yani
+# Agenda Odontológica - Consultorio Marie & Yani
 
 Agenda web para un consultorio con dos odontólogas: pacientes, turnos, ficha clínica y liquidación diaria.
 
