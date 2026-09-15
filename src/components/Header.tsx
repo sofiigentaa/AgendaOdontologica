@@ -20,11 +20,9 @@ import {
   ChevronDown,
   Trash2,
   Database,
-  Lock,
-  Share2
+  Lock
 } from 'lucide-react';
 import { ViewMode, FilterType, MainTab } from '../types';
-import { ShareAppModal } from './ShareAppModal';
 
 interface HeaderProps {
   activeTab: MainTab;
@@ -104,7 +102,6 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
 }) => {
   const [isBackupMenuOpen, setIsBackupMenuOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const backupMenuRef = useRef<HTMLDivElement>(null);
@@ -311,18 +308,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden sm:inline">{isConnectingGoogle ? 'Conectando...' : 'Google'}</span>
               </button>
             )}
-
-            {/* Compartir App Link */}
-            <button
-              id="btn-share-app-header"
-              type="button"
-              onClick={() => setIsShareModalOpen(true)}
-              className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold border border-white/30 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
-              title="Compartir enlace de la aplicación por WhatsApp o copiar link"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Compartir</span>
-            </button>
 
             {/* Direct Logout / Lock Button */}
             {onLogout && (
@@ -653,12 +638,6 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
       </div>
-
-      {/* Share Application Modal */}
-      <ShareAppModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-      />
     </header>
   );
 };
