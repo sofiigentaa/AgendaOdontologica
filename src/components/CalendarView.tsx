@@ -57,6 +57,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onToggleAppointmentComplete,
   onDeleteAppointment,
   onDeleteCancelledAppointments,
+  onSelectContact,
   onOpenAddContactModal,
   targetDate,
   onClearTargetDate,
