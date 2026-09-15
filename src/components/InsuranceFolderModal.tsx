@@ -12,8 +12,7 @@ import {
   Loader2,
   ExternalLink,
   FileCheck,
-  Eye,
-  Share2
+  Eye
 } from 'lucide-react';
 import { InsuranceFolderFile } from '../types';
 
@@ -292,44 +291,6 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) {
       console.error('Error al descargar archivo:', e);
-    }
-  };
-
-  // Native Mobile Share / Open with Phone Apps (WhatsApp, Drive, Adobe, Files, etc.)
-  const handleShareMobileApp = async (file: InsuranceFolderFile) => {
-    try {
-      if (!file.dataUrl || file.dataUrl.length < 50) {
-        handlePreviewFile(file);
-        return;
-      }
-      const isPdf = file.fileType === 'application/pdf' || /\.pdf$/i.test(file.fileName || '');
-      const blob = dataUrlToBlob(file.dataUrl, file.fileType || (isPdf ? 'application/pdf' : 'application/octet-stream'));
-      const fileName = file.fileName || file.title || (isPdf ? 'documento.pdf' : 'archivo');
-      const fileObj = new File([blob], fileName, { type: file.fileType || (isPdf ? 'application/pdf' : 'application/octet-stream') });
-
-      // Try native file sharing
-      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [fileObj] })) {
-        await navigator.share({
-          files: [fileObj],
-          title: file.title || fileName,
-          text: `Documento Odontológico (${file.insuranceName || 'Obra Social'}): ${file.title || fileName}`
-        });
-        return;
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        return; // User intentionally cancelled share sheet
-      }
-      console.warn('Native file share not available or failed:', err);
-    }
-
-    // Fallback: Download file directly + open WhatsApp or fallback options
-    handleDownloadFile(file);
-    try {
-      const shareText = encodeURIComponent(`📄 Documento Odontológico: ${file.title || file.fileName} (${file.insuranceName || 'Obra Social'})`);
-      window.open(`https://wa.me/?text=${shareText}`, '_blank');
-    } catch {
-      // Ignored
     }
   };
 
@@ -698,26 +659,6 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
                             <span>Ver Archivo</span>
                           </button>
 
-                          {/* Compartir / Enviar móvil */}
-                          <button
-                            type="button"
-                            onClick={() => handleShareMobileApp(f)}
-                            title="Compartir por WhatsApp o aplicaciones"
-                            className="p-2 sm:p-2.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl border border-slate-200 transition-colors cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
-                          >
-                            <Share2 className="w-4 h-4" />
-                          </button>
-
-                          {/* Descargar directo */}
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadFile(f)}
-                            title="Descargar archivo al dispositivo"
-                            className="p-2 sm:p-2.5 text-slate-600 hover:text-[#2E7D5E] hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-
                           {/* Eliminar */}
                           <button
                             type="button"
@@ -772,26 +713,6 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
               </div>
 
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleShareMobileApp(previewFile)}
-                  className="px-2.5 sm:px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer min-h-[36px]"
-                  title="Compartir archivo"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Compartir</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleDownloadFile(previewFile)}
-                  className="px-2.5 sm:px-3 py-1.5 bg-white text-[#2E7D5E] hover:bg-emerald-50 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer min-h-[36px]"
-                  title="Descargar archivo"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Descargar</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={() => handleOpenDirectInTab(previewFile)}
