@@ -214,8 +214,8 @@ export default function App() {
   const handleManualSync = async () => {
     setIsSyncingCloud(true);
     try {
-      // 1. Push current state to Supabase PostgreSQL
-      await syncToSupabase({
+      // 1. Push current state to the backend
+      const pushOk = await syncToSupabase({
         contacts,
         appointments,
         reminders,
@@ -224,6 +224,8 @@ export default function App() {
       });
 
       const sbData = await fetchFromSupabase();
+      const pullOk = sbData !== null;
+
       if (sbData) {
         if (sbData.contacts && sbData.contacts.length > 0) {
           setContacts((prev) => {
@@ -261,9 +263,13 @@ export default function App() {
         }
       }
 
-      showToast('☁️ ¡Agenda y turnos sincronizados con la nube (PC y Celular)!');
+      if (pushOk && pullOk) {
+        showToast('☁️ ¡Agenda y turnos sincronizados con la nube (PC y Celular)!');
+      } else {
+        showToast('⚠️ No se pudo confirmar la sincronización con el servidor. Tus datos siguen guardados en este dispositivo — revisá tu conexión o iniciá sesión de nuevo.');
+      }
     } catch (e) {
-      showToast('Aviso de sincronización. Los datos permanecen guardados en este dispositivo.');
+      showToast('⚠️ Error de sincronización. Los datos permanecen guardados en este dispositivo.');
     } finally {
       setIsSyncingCloud(false);
     }
