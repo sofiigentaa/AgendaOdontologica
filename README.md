@@ -20,18 +20,6 @@ El deploy actual en Render **no tiene PostgreSQL conectado** (`/api/db/all` resp
 - Backup JSON y TXT de contingencia
 - Login de consultorio (demo) y WhatsApp / IA opcionales
 
-## Instalación
-
-```bash
-cd "Escritorio/Proyectos Personales/Agenda/mi-agenda(8)"
-npm install
-npx playwright install chromium
-npm run dev
-```
-
-Abrí http://localhost:3000 — email cualquiera y contraseña `admin123`.
-
-Variables opcionales: copiá `.env.example` a `.env.local` (`GEMINI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). En el servidor: `DATABASE_URL` (Postgres), `ADMIN_API_TOKEN` (protege wipe de datos).
 
 ## Tests
 
