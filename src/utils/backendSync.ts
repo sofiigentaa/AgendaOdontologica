@@ -11,9 +11,9 @@ export async function syncToSupabase(data: {
   notes?: ContactNote[];
   attachments?: ContactAttachment[];
   insuranceFiles?: InsuranceFolderFile[];
-}) {
+}): Promise<boolean> {
   try {
-    await fetch('/api/sync/agenda', {
+    const res = await fetch('/api/sync/agenda', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -23,8 +23,14 @@ export async function syncToSupabase(data: {
         sourceDevice: navigator.userAgent,
       }),
     });
+    if (!res.ok) {
+      console.warn('Backend sync failed with status:', res.status);
+      return false;
+    }
+    return true;
   } catch (err) {
     console.error('Backend sync notice:', err);
+    return false;
   }
 }
 
