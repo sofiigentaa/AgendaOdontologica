@@ -808,6 +808,25 @@ export default function App() {
     showToast('Turno eliminado del calendario');
   };
 
+  const handleDeleteCancelledAppointments = () => {
+    const cancelledIds = appointments
+      .filter((a) => a.whatsappStatus === 'cancelled')
+      .map((a) => a.id);
+
+    if (cancelledIds.length === 0) {
+      showToast('No hay turnos cancelados para eliminar');
+      return;
+    }
+
+    const updated = appointments.filter((a) => a.whatsappStatus !== 'cancelled');
+    updateAppointments(updated);
+    cancelledIds.forEach((id) => {
+      deleteAppointmentFromSupabase(id).catch(() => {});
+      fetch(`/api/appointment/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    });
+    showToast(`🗑️ ${cancelledIds.length} turno${cancelledIds.length === 1 ? '' : 's'} cancelado${cancelledIds.length === 1 ? '' : 's'} eliminado${cancelledIds.length === 1 ? '' : 's'}`);
+  };
+
   const handleOpenScheduleModalGeneral = (initialDate?: string, editingAppt?: Appointment | null, initialTime?: string) => {
     setScheduleModalInitialContactId(editingAppt ? editingAppt.contactId : '');
     setScheduleModalInitialDate(initialDate || getTodayISO());
@@ -1330,6 +1349,7 @@ export default function App() {
             onOpenScheduleModal={handleOpenScheduleModalGeneral}
             onToggleAppointmentComplete={handleToggleAppointmentComplete}
             onDeleteAppointment={handleDeleteAppointment}
+            onDeleteCancelledAppointments={handleDeleteCancelledAppointments}
             onSelectContact={(c) => {
               setSelectedDetailContact(c);
               setIsDetailModalOpen(true);
