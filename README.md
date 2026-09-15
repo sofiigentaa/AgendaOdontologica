@@ -8,9 +8,8 @@ Versión de trabajo: `Escritorio/Proyectos Personales/Agenda/mi-agenda(8)`
 
 ## Stack
 
-React 19 + Vite + Express + Tailwind. Persistencia principal: **localStorage** del navegador. Opcional: archivo en el servidor, Supabase, Firebase/Google y PostgreSQL (Drizzle) si hay variables de entorno.
-
-El deploy actual en Render **no tiene PostgreSQL conectado** (`/api/db/all` responde `dbAvailable: false`). Los datos viven en el browser de cada dispositivo. Si Render reinicia el servicio, el archivo `agenda_storage.json` del servidor se pierde.
+React 19 + Vite + Express + Tailwind.
+El deploy actual en Render **no tiene PostgreSQL conectado** (`/api/db/all` responde `dbAvailable: false`). 
 
 ## Funcionalidades
 
