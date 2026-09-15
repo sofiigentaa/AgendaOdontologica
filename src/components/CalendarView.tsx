@@ -1727,7 +1727,6 @@ ${confirmUrl}
 ❌ *CANCELAR / REPROGRAMAR:*
 ${cancelUrl}
 
-👉 O responda este mensaje con *"SI"* para confirmar o *"NO"* para cancelar.
 ¡Muchas gracias y la/lo esperamos! 🦷✨`;
 
                             // Clean phone number (Argentina +54 prefix format handling)
