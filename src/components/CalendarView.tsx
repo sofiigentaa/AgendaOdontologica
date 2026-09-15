@@ -39,6 +39,7 @@ interface CalendarViewProps {
   onOpenScheduleModal: (initialDate?: string, editingAppt?: Appointment | null, initialTime?: string) => void;
   onToggleAppointmentComplete: (appointmentId: string) => void;
   onDeleteAppointment: (appointmentId: string) => void;
+  onDeleteCancelledAppointments?: () => void;
   onSelectContact: (contact: Contact) => void;
   onOpenAddContactModal: () => void;
   targetDate?: string | null;
@@ -55,7 +56,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onOpenScheduleModal,
   onToggleAppointmentComplete,
   onDeleteAppointment,
-  onSelectContact,
+  onDeleteCancelledAppointments,
   onOpenAddContactModal,
   targetDate,
   onClearTargetDate,
@@ -74,6 +75,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [selectedApptDetail, setSelectedApptDetail] = useState<Appointment | null>(null);
   const [selectedDayModalDate, setSelectedDayModalDate] = useState<string | null>(null);
   const [pickedJumpDate, setPickedJumpDate] = useState<string>('');
+  const [confirmingDeleteCancelled, setConfirmingDeleteCancelled] = useState(false);
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     return typeof window !== 'undefined' ? window.innerWidth < 640 : false;
   });
@@ -339,6 +341,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       return true;
     });
   }, [appointments, contacts, searchTerm, selectedInsuranceFilter, selectedDentistFilter, selectedMotiveFilter]);
+
+  // Count of cancelled appointments currently visible in the list
+  const cancelledCount = useMemo(() => {
+    return filteredAppointments.filter((a) => a.whatsappStatus === 'cancelled').length;
+  }, [filteredAppointments]);
 
   // Appointments grouped by date YYYY-MM-DD
   const appointmentsByDate = useMemo(() => {
@@ -1008,8 +1015,43 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 <CalendarIcon className="w-3.5 h-3.5 text-[#2E7D5E]" />
                 <span>Hoy</span>
               </button>
+              {onDeleteCancelledAppointments && cancelledCount > 0 && (
+                confirmingDeleteCancelled ? (
+                  <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5">
+                    <span className="text-[11px] font-bold text-rose-800 whitespace-nowrap">¿Eliminar {cancelledCount}?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeleteCancelledAppointments();
+                        setConfirmingDeleteCancelled(false);
+                      }}
+                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] rounded-md cursor-pointer transition-colors"
+                    >
+                      Sí, eliminar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDeleteCancelled(false)}
+                      className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] rounded-md cursor-pointer transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDeleteCancelled(true)}
+                    title="Eliminar todos los turnos cancelados de la lista"
+                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 font-semibold text-xs rounded-lg border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Eliminar Turnos Cancelados ({cancelledCount})</span>
+                  </button>
+                )
+              )}
             </div>
           </div>
+
 
           {filteredAppointments.length === 0 ? (
             <div className="py-12 text-center text-slate-500 space-y-3">
