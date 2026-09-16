@@ -815,10 +815,25 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
               </div>
 
               {patientAppointments.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-500 space-y-2">
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-500 space-y-3">
                   <Calendar className="w-8 h-8 text-slate-400 mx-auto" />
-                  <p className="text-sm font-semibold">No hay turnos registrados para este paciente</p>
-                  <p className="text-xs text-slate-400">Las citas agendadas desde la agenda general aparecerán aquí.</p>
+                  <div>
+                    <p className="text-sm font-semibold">No hay turnos registrados para este paciente</p>
+                    <p className="text-xs text-slate-400">Las citas agendadas desde la agenda general aparecerán aquí.</p>
+                  </div>
+                  {onScheduleAppointment && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onScheduleAppointment(contact);
+                        onClose();
+                      }}
+                      className="px-4 py-2 bg-[#2E7D5E] hover:bg-[#24664c] active:bg-[#1e543e] text-white font-bold text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Crear Turno para {contact.fullName}</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
