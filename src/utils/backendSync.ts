@@ -58,6 +58,7 @@ export async function fetchFromSupabase(): Promise<{
 
 /**
  * Delete a specific appointment: leemos el estado actual, sacamos el item, reenviamos.
+ * (Se mantiene por compatibilidad; para borrados nuevos usar deleteAppointmentRemote.)
  */
 export async function deleteAppointmentFromSupabase(appointmentId: string): Promise<void> {
   try {
@@ -126,7 +127,15 @@ export function subscribeToSupabaseRealtime(onSync: () => void): () => void {
     es.onmessage = (evt) => {
       try {
         const parsed = JSON.parse(evt.data);
-        if (parsed.type === 'AGENDA_UPDATE' || parsed.type === 'INITIAL_SYNC' || parsed.type === 'INSURANCE_FILES_UPDATE') {
+        if (
+          parsed.type === 'AGENDA_UPDATE' ||
+          parsed.type === 'INITIAL_SYNC' ||
+          parsed.type === 'INSURANCE_FILES_UPDATE' ||
+          parsed.type === 'CONTACT_UPSERT' ||
+          parsed.type === 'CONTACT_DELETE' ||
+          parsed.type === 'APPOINTMENT_UPSERT' ||
+          parsed.type === 'APPOINTMENT_DELETE'
+        ) {
           onSync();
         }
       } catch {}
@@ -141,4 +150,82 @@ export function subscribeToSupabaseRealtime(onSync: () => void): () => void {
   return () => {
     if (es) es.close();
   };
+}
+
+// -------------------------------------------------------------
+// Endpoints por registro individual (Postgres = fuente de verdad).
+// Evitan que un dispositivo pise los cambios de otro: cada guardado
+// o borrado toca UN SOLO registro por id, no la lista completa.
+// -------------------------------------------------------------
+
+export async function upsertContact(contact: Contact): Promise<boolean> {
+  try {
+    const res = await fetch('/api/contacts', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(contact),
+    });
+    return res.ok;
+  } catch (e) {
+    console.warn('upsertContact error:', e);
+    return false;
+  }
+}
+
+export async function deleteContactRemote(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE', credentials: 'include' });
+    return res.ok;
+  } catch (e) {
+    console.warn('deleteContactRemote error:', e);
+    return false;
+  }
+}
+
+export async function fetchContactsFresh(): Promise<Contact[]> {
+  try {
+    const res = await fetch('/api/contacts', { credentials: 'include' });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json?.contacts || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function upsertAppointment(appointment: Appointment): Promise<boolean> {
+  try {
+    const res = await fetch('/api/appointments', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appointment),
+    });
+    return res.ok;
+  } catch (e) {
+    console.warn('upsertAppointment error:', e);
+    return false;
+  }
+}
+
+export async function deleteAppointmentRemote(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE', credentials: 'include' });
+    return res.ok;
+  } catch (e) {
+    console.warn('deleteAppointmentRemote error:', e);
+    return false;
+  }
+}
+
+export async function fetchAppointmentsFresh(): Promise<Appointment[]> {
+  try {
+    const res = await fetch('/api/appointments', { credentials: 'include' });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json?.appointments || [];
+  } catch {
+    return [];
+  }
 }
