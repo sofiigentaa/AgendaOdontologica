@@ -713,7 +713,7 @@ app.post('/api/sync/insurance-file', requireSession, (req, res) => {
       res.status(400).json({ success: false, error: 'Invalid file data' });
     }
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
 });
 
@@ -738,7 +738,7 @@ app.delete('/api/sync/insurance-file/:id', requireSession, (req, res) => {
 
     res.json({ success: true, lastUpdated: sharedAgendaStore.lastUpdated });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
 });
 
@@ -756,7 +756,7 @@ app.get('/api/contacts', requireSession, async (req, res) => {
     const rows = await db.select().from(schema.contacts);
     res.json({ success: true, contacts: rows });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
 });
 
@@ -801,7 +801,7 @@ app.post('/api/contacts', requireSession, async (req, res) => {
     broadcastToSSEClients({ type: 'CONTACT_UPSERT', contact: c, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
 });
 
@@ -814,7 +814,7 @@ app.delete('/api/contacts/:id', requireSession, async (req, res) => {
     broadcastToSSEClients({ type: 'CONTACT_DELETE', id, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
 });
 
@@ -826,7 +826,7 @@ app.get('/api/appointments', requireSession, async (req, res) => {
     const rows = await db.select().from(schema.appointments);
     res.json({ success: true, appointments: rows });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
 });
 
@@ -877,7 +877,7 @@ app.post('/api/appointments', requireSession, async (req, res) => {
     broadcastToSSEClients({ type: 'APPOINTMENT_UPSERT', appointment: a, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
 });
 
@@ -890,7 +890,7 @@ app.delete('/api/appointments/:id', requireSession, async (req, res) => {
     broadcastToSSEClients({ type: 'APPOINTMENT_DELETE', id, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
 });
 
