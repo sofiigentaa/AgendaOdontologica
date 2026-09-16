@@ -66,7 +66,13 @@ import {
   subscribeToSupabaseRealtime, 
   deleteAppointmentFromSupabase,
   deleteReminderFromSupabase,
-  clearRemindersFromSupabase
+  clearRemindersFromSupabase,
+  upsertContact,
+  deleteContactRemote,
+  fetchContactsFresh,
+  upsertAppointment,
+  deleteAppointmentRemote,
+  fetchAppointmentsFresh,
 } from './utils/backendSync';
 import { 
   Users, 
@@ -182,6 +188,17 @@ export default function App() {
     });
   };
 
+  // Helper to merge two lists of records that have `id`, without losing local
+  // records that the server doesn't know about yet.
+  function mergeById<T extends { id: string }>(fresh: T[], prev: T[]): T[] {
+    const map = new Map<string, T>();
+    fresh.forEach((item) => map.set(item.id, item));
+    prev.forEach((item) => {
+      if (!map.has(item.id)) map.set(item.id, item);
+    });
+    return Array.from(map.values());
+  }
+
   // Toast state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
@@ -210,43 +227,46 @@ export default function App() {
   const patientConfirmId = urlParams?.get('confirm_id') || urlParams?.get('turno');
   const patientAction = (urlParams?.get('action') as 'confirm' | 'cancel') || (urlParams?.has('cancelar') ? 'cancel' : 'confirm');
 
+  // Trae siempre la versión fresca de Postgres (fuente de verdad) para
+  // contactos y turnos, y la combina por id con lo que ya está en memoria,
+  // sin borrar nada que el dispositivo tenga y el servidor todavía no.
+  const syncFreshContactsAndAppointments = () => {
+    fetchContactsFresh().then((fresh) => {
+      if (fresh.length === 0) return;
+      setContacts((prev) => {
+        const merged = mergeById(fresh, prev);
+        try { saveStoredContacts(merged); } catch {}
+        return merged;
+      });
+    });
+
+    fetchAppointmentsFresh().then((fresh) => {
+      if (fresh.length === 0) return;
+      setAppointments((prev) => {
+        const merged = mergeAppointmentsWithState(fresh, prev);
+        const fullMerged = mergeById(merged, prev);
+        try { saveStoredAppointments(fullMerged); } catch {}
+        return fullMerged;
+      });
+    });
+  };
+
   // Manual & automatic bi-directional sync function
   const handleManualSync = async () => {
     setIsSyncingCloud(true);
     try {
-      // 1. Push current state to Supabase PostgreSQL
+      // 1. Push current state to backend/Postgres
       await syncToSupabase({
-        contacts,
-        appointments,
         reminders,
         notes,
         insuranceFiles,
       });
 
+      // 2. Traer versión fresca de contactos y turnos (por registro, sin pisar)
+      syncFreshContactsAndAppointments();
+
       const sbData = await fetchFromSupabase();
       if (sbData) {
-        if (sbData.contacts && sbData.contacts.length > 0) {
-          setContacts((prev) => {
-            const map = new Map<string, Contact>();
-            prev.forEach((c) => map.set(c.id, c));
-            const merged = sbData.contacts!.map((c) => {
-              const existing = map.get(c.id);
-              if (!c.fullName && existing?.fullName) {
-                return { ...existing, ...c, fullName: existing.fullName, primaryPhone: c.primaryPhone || existing.primaryPhone };
-              }
-              return c;
-            });
-            try { localStorage.setItem('mi_agenda_contacts_v6', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        }
-        if (sbData.appointments && sbData.appointments.length > 0) {
-          setAppointments((prev) => {
-            const merged = mergeAppointmentsWithState(sbData.appointments!, prev);
-            try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        }
         if (sbData.reminders !== undefined) {
           setReminders(sbData.reminders);
           try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
@@ -269,33 +289,15 @@ export default function App() {
     }
   };
 
-  // Re-sync automatically via Supabase when mobile or PC browser tab becomes active/visible
+  // Re-sync automatically via backend when mobile or PC browser tab becomes active/visible
   useEffect(() => {
     const handleActiveSync = () => {
+      // Contactos y turnos: siempre frescos de Postgres, combinados por id
+      syncFreshContactsAndAppointments();
+
+      // Recordatorios, notas y archivos de obra social: sistema anterior
       fetchFromSupabase().then((sbData) => {
         if (sbData) {
-          if (sbData.contacts && sbData.contacts.length > 0) {
-            setContacts((prev) => {
-              const map = new Map<string, Contact>();
-              prev.forEach((c) => map.set(c.id, c));
-              const merged = sbData.contacts!.map((c) => {
-                const existing = map.get(c.id);
-                if (!c.fullName && existing?.fullName) {
-                  return { ...existing, ...c, fullName: existing.fullName, primaryPhone: c.primaryPhone || existing.primaryPhone };
-                }
-                return c;
-              });
-              try { localStorage.setItem('mi_agenda_contacts_v6', JSON.stringify(merged)); } catch {}
-              return merged;
-            });
-          }
-          if (sbData.appointments && sbData.appointments.length > 0) {
-            setAppointments((prev) => {
-              const merged = mergeAppointmentsWithState(sbData.appointments!, prev);
-              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(merged)); } catch {}
-              return merged;
-            });
-          }
           if (sbData.reminders !== undefined) {
             setReminders(sbData.reminders);
             try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
@@ -326,7 +328,7 @@ export default function App() {
     };
   }, []);
 
-  // Initialize data from local storage and sync with Supabase
+  // Initialize data from local storage and sync with backend/Postgres
   useEffect(() => {
     const localContacts = getStoredContacts();
     const localReminders = getStoredReminders();
@@ -349,34 +351,26 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // 1. Initial sync with Supabase
+    // 1. Contactos y turnos: siempre traer la versión fresca de Postgres y
+    // combinarla por id con lo local (nunca reemplaza la lista entera).
+    syncFreshContactsAndAppointments();
+
+    // Si Postgres no tenía nada todavía, empujamos lo local para sembrarlo.
+    fetchContactsFresh().then((freshContacts) => {
+      if (freshContacts.length === 0 && localContacts.length > 0) {
+        localContacts.forEach((c) => upsertContact(c));
+      }
+    });
+    fetchAppointmentsFresh().then((freshAppts) => {
+      if (freshAppts.length === 0 && localAppointments.length > 0) {
+        localAppointments.forEach((a) => upsertAppointment(a));
+      }
+    });
+
+    // 2. Recordatorios, notas y archivos de obra social: sistema anterior
+    // (sync como lista completa vía /api/sync/agenda)
     fetchFromSupabase().then((sbData) => {
       if (sbData) {
-        if (sbData.contacts && sbData.contacts.length > 0) {
-          setContacts((prev) => {
-            const map = new Map<string, Contact>();
-            prev.forEach((c) => map.set(c.id, c));
-            const merged = sbData.contacts!.map((c) => {
-              const existing = map.get(c.id);
-              if (!c.fullName && existing?.fullName) {
-                return { ...existing, ...c, fullName: existing.fullName, primaryPhone: c.primaryPhone || existing.primaryPhone };
-              }
-              return c;
-            });
-            try { localStorage.setItem('mi_agenda_contacts_v6', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        }
-        if (sbData.appointments && sbData.appointments.length > 0) {
-          setAppointments((prev) => {
-            const merged = mergeAppointmentsWithState(sbData.appointments!, prev);
-            try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-        } else if (localAppointments && localAppointments.length > 0) {
-          // If cloud has no appointments yet, push local appointments up to cloud
-          syncToSupabase({ appointments: localAppointments });
-        }
         if (sbData.reminders !== undefined) {
           setReminders(sbData.reminders);
           try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
@@ -390,10 +384,8 @@ export default function App() {
           saveStoredInsuranceFiles(sbData.insuranceFiles);
         }
       } else {
-        // If Supabase was empty, seed with initial local dataset
+        // Si el backend no tenía nada, sembramos con el dataset local
         syncToSupabase({
-          contacts: localContacts,
-          appointments: localAppointments,
           reminders: localReminders,
           notes: localNotes,
           insuranceFiles: localInsuranceFiles,
@@ -401,33 +393,12 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // 2. Direct Supabase Realtime Channels subscription for instant cross-device database synchronization
-    const unsubscribeSupabaseRealtime = subscribeToSupabaseRealtime(async () => {
-      try {
-        const sbData = await fetchFromSupabase();
+    // 3. Suscripción en tiempo real (SSE) - reemplaza a Supabase Realtime
+    const unsubscribeSupabaseRealtime = subscribeToSupabaseRealtime(() => {
+      // Cualquier evento relevante dispara un refresco fresco por id
+      syncFreshContactsAndAppointments();
+      fetchFromSupabase().then((sbData) => {
         if (sbData) {
-          if (sbData.contacts && sbData.contacts.length > 0) {
-            setContacts((prev) => {
-              const map = new Map<string, Contact>();
-              prev.forEach((c) => map.set(c.id, c));
-              const merged = sbData.contacts!.map((c) => {
-                const existing = map.get(c.id);
-                if (!c.fullName && existing?.fullName) {
-                  return { ...existing, ...c, fullName: existing.fullName, primaryPhone: c.primaryPhone || existing.primaryPhone };
-                }
-                return c;
-              });
-              try { localStorage.setItem('mi_agenda_contacts_v6', JSON.stringify(merged)); } catch {}
-              return merged;
-            });
-          }
-          if (sbData.appointments && sbData.appointments.length > 0) {
-            setAppointments((prev) => {
-              const merged = mergeAppointmentsWithState(sbData.appointments!, prev);
-              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(merged)); } catch {}
-              return merged;
-            });
-          }
           if (sbData.reminders !== undefined) {
             setReminders(sbData.reminders);
             try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
@@ -441,10 +412,10 @@ export default function App() {
             saveStoredInsuranceFiles(sbData.insuranceFiles);
           }
         }
-      } catch {}
+      }).catch(() => {});
     });
 
-    // 3. Connect to Server-Sent Events (SSE) stream for instant real-time pushes (e.g. when patient clicks Confirm/Cancel on WhatsApp link)
+    // 4. Connect to Server-Sent Events (SSE) stream for instant real-time pushes (e.g. when patient clicks Confirm/Cancel on WhatsApp link)
     let sseSource: EventSource | null = null;
     try {
       sseSource = new EventSource('/api/sync/events');
@@ -455,23 +426,44 @@ export default function App() {
             const data = payload.data || {};
             showToast(`🟢 ¡Turno Confirmado! ${data.patientName || 'El paciente'} confirmó su asistencia para el día ${data.date || ''} a las ${data.time || ''} hs.`);
             if (payload.agenda?.appointments) {
-              setAppointments(payload.agenda.appointments);
-              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(payload.agenda.appointments)); } catch {}
+              setAppointments((prev) => mergeById(payload.agenda.appointments, prev));
             }
           } else if (payload.type === 'APPOINTMENT_CANCELLED') {
             const data = payload.data || {};
             showToast(`🔴 Turno Cancelado: ${data.patientName || 'El paciente'} canceló su turno del día ${data.date || ''} a las ${data.time || ''} hs.`);
             if (payload.agenda?.appointments) {
-              setAppointments(payload.agenda.appointments);
-              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(payload.agenda.appointments)); } catch {}
+              setAppointments((prev) => mergeById(payload.agenda.appointments, prev));
             }
+          } else if (payload.type === 'CONTACT_UPSERT' && payload.contact) {
+            setContacts((prev) => {
+              const merged = mergeById([payload.contact], prev);
+              try { saveStoredContacts(merged); } catch {}
+              return merged;
+            });
+          } else if (payload.type === 'CONTACT_DELETE' && payload.id) {
+            setContacts((prev) => {
+              const updated = prev.filter((c) => c.id !== payload.id);
+              try { saveStoredContacts(updated); } catch {}
+              return updated;
+            });
+          } else if (payload.type === 'APPOINTMENT_UPSERT' && payload.appointment) {
+            setAppointments((prev) => {
+              const merged = mergeById([payload.appointment], prev);
+              try { saveStoredAppointments(merged); } catch {}
+              return merged;
+            });
+          } else if (payload.type === 'APPOINTMENT_DELETE' && payload.id) {
+            setAppointments((prev) => {
+              const updated = prev.filter((a) => a.id !== payload.id);
+              try { saveStoredAppointments(updated); } catch {}
+              return updated;
+            });
           } else if (payload.type === 'AGENDA_UPDATE' && payload.data) {
             if (payload.data.appointments) {
-              setAppointments(payload.data.appointments);
-              try { localStorage.setItem('mi_agenda_appointments_v6', JSON.stringify(payload.data.appointments)); } catch {}
+              setAppointments((prev) => mergeById(payload.data.appointments, prev));
             }
             if (payload.data.contacts) {
-              setContacts(payload.data.contacts);
+              setContacts((prev) => mergeById(payload.data.contacts, prev));
             }
           }
         } catch {}
@@ -625,20 +617,12 @@ export default function App() {
     }
   };
 
-  // Save contacts on update
+  // Save contacts on update (solo actualiza el estado local + localStorage;
+  // el guardado remoto real lo hacen upsertContact/deleteContactRemote,
+  // llamados explícitamente desde cada handler más abajo).
   const updateContacts = (newContacts: Contact[]) => {
     setContacts(newContacts);
     saveStoredContacts(newContacts);
-    syncToFirestore({ contacts: newContacts }, true);
-    syncToSupabase({ contacts: newContacts });
-    try {
-      fetch('/api/sync/agenda', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ contacts: newContacts }),
-      }).catch(() => {});
-    } catch {}
   };
 
   const updateReminders = (newReminders: CallReminder[]) => {
@@ -661,31 +645,28 @@ export default function App() {
     syncToFirestore({ attachments: newAttachments }, true);
   };
 
+  // Save appointments on update (solo actualiza el estado local + localStorage;
+  // el guardado remoto real lo hacen upsertAppointment/deleteAppointmentRemote,
+  // llamados explícitamente desde cada handler más abajo).
   const updateAppointments = (newAppts: Appointment[]) => {
     setAppointments(newAppts);
     saveStoredAppointments(newAppts);
-    syncToFirestore({ appointments: newAppts }, true);
-    syncToSupabase({ appointments: newAppts });
-    try {
-      fetch('/api/sync/agenda', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ appointments: newAppts }),
-      }).catch(() => {});
-    } catch {}
   };
 
   const handleUpdateAppointmentStatus = (
     appointmentId: string,
     status: 'pending' | 'confirmed' | 'cancelled'
   ) => {
-    const updated = appointments.map((a) =>
-      a.id === appointmentId
-        ? { ...a, whatsappStatus: status, whatsappLastReply: new Date().toISOString() }
-        : a
-    );
+    let updatedAppt: Appointment | null = null;
+    const updated = appointments.map((a) => {
+      if (a.id === appointmentId) {
+        updatedAppt = { ...a, whatsappStatus: status, whatsappLastReply: new Date().toISOString() };
+        return updatedAppt;
+      }
+      return a;
+    });
     updateAppointments(updated);
+    if (updatedAppt) upsertAppointment(updatedAppt);
     if (status === 'confirmed') {
       showToast('✔ Turno marcado como Confirmado.');
     } else if (status === 'cancelled') {
@@ -746,10 +727,16 @@ export default function App() {
       dentist: 'Yani' | 'Marie' | 'Ambas';
     }
   ) => {
-    const updated = appointments.map((a) =>
-      a.id === appointmentId ? { ...a, ...financialData } : a
-    );
+    let updatedAppt: Appointment | null = null;
+    const updated = appointments.map((a) => {
+      if (a.id === appointmentId) {
+        updatedAppt = { ...a, ...financialData };
+        return updatedAppt;
+      }
+      return a;
+    });
     updateAppointments(updated);
+    if (updatedAppt) upsertAppointment(updatedAppt);
     showToast('Datos financieros del turno actualizados');
   };
 
@@ -775,10 +762,11 @@ export default function App() {
   ) => {
     const targetId = data.appointmentId || appointmentId;
     if (targetId) {
-      const updated = appointments.map((a) =>
-        a.id === targetId ? { ...a, ...data, id: targetId } : a
-      );
+      const existing = appointments.find((a) => a.id === targetId);
+      const updatedAppt = { ...existing, ...data, id: targetId } as Appointment;
+      const updated = appointments.map((a) => (a.id === targetId ? updatedAppt : a));
       updateAppointments(updated);
+      upsertAppointment(updatedAppt);
       showToast('Turno actualizado en el calendario');
     } else {
       const newAppt: Appointment = {
@@ -788,22 +776,29 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
       updateAppointments([newAppt, ...appointments]);
+      upsertAppointment(newAppt);
       showToast('Nuevo turno agendado en el calendario');
     }
   };
 
   const handleToggleAppointmentComplete = (appointmentId: string) => {
-    const updated = appointments.map((a) =>
-      a.id === appointmentId ? { ...a, completed: !a.completed } : a
-    );
+    let toggled: Appointment | null = null;
+    const updated = appointments.map((a) => {
+      if (a.id === appointmentId) {
+        toggled = { ...a, completed: !a.completed };
+        return toggled;
+      }
+      return a;
+    });
     updateAppointments(updated);
+    if (toggled) upsertAppointment(toggled);
     showToast('Estado del turno actualizado');
   };
 
   const handleDeleteAppointment = (appointmentId: string) => {
     const updated = appointments.filter((a) => a.id !== appointmentId);
     updateAppointments(updated);
-    deleteAppointmentFromSupabase(appointmentId).catch(() => {});
+    deleteAppointmentRemote(appointmentId);
     fetch(`/api/appointment/${appointmentId}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
     showToast('Turno eliminado del calendario');
   };
@@ -821,7 +816,7 @@ export default function App() {
     const updated = appointments.filter((a) => a.whatsappStatus !== 'cancelled');
     updateAppointments(updated);
     cancelledIds.forEach((id) => {
-      deleteAppointmentFromSupabase(id).catch(() => {});
+      deleteAppointmentRemote(id);
       fetch(`/api/appointment/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
     });
     showToast(`🗑️ ${cancelledIds.length} turno${cancelledIds.length === 1 ? '' : 's'} cancelado${cancelledIds.length === 1 ? '' : 's'} eliminado${cancelledIds.length === 1 ? '' : 's'}`);
@@ -893,6 +888,7 @@ export default function App() {
       contactId = newContact.id;
       currentContactList = [newContact, ...contacts];
       updateContacts(currentContactList);
+      upsertContact(newContact);
     }
 
     if (payload.appointment && payload.appointment.date && contactId) {
@@ -909,6 +905,7 @@ export default function App() {
       };
 
       updateAppointments([newAppt, ...appointments]);
+      upsertAppointment(newAppt);
       showToast(`¡Turno de ${patientName} agendado automáticamente en el calendario para el ${payload.appointment.date} a las ${newAppt.time} hs!`);
     } else {
       showToast(`¡Paciente ${patientName} guardado en la agenda!`);
@@ -942,19 +939,17 @@ export default function App() {
   const handleSaveContact = (data: Partial<Contact>) => {
     if (editingContact) {
       // Edit existing
-      const updated = contacts.map((c) =>
-        c.id === editingContact.id
-          ? {
-              ...c,
-              ...data,
-              updatedAt: new Date().toISOString(),
-            }
-          : c
-      );
-      updateContacts(updated as Contact[]);
+      const updatedContact: Contact = {
+        ...editingContact,
+        ...data,
+        updatedAt: new Date().toISOString(),
+      } as Contact;
+      const updated = contacts.map((c) => (c.id === editingContact.id ? updatedContact : c));
+      updateContacts(updated);
+      upsertContact(updatedContact);
       showToast(`Contacto "${data.fullName}" actualizado correctamente`);
       if (selectedDetailContact?.id === editingContact.id) {
-        setSelectedDetailContact({ ...selectedDetailContact, ...data } as Contact);
+        setSelectedDetailContact(updatedContact);
       }
     } else {
       // Create new
@@ -975,6 +970,7 @@ export default function App() {
         updatedAt: new Date().toISOString(),
       };
       updateContacts([newContact, ...contacts]);
+      upsertContact(newContact);
       showToast(`Nuevo contacto "${newContact.fullName}" registrado`);
     }
   };
@@ -988,6 +984,7 @@ export default function App() {
     const filteredA = attachments.filter((a) => a.contactId !== deletingContact.id);
 
     updateContacts(filteredC);
+    deleteContactRemote(deletingContact.id);
     updateReminders(filteredR);
     updateNotes(filteredN);
     updateAttachments(filteredA);
@@ -999,29 +996,36 @@ export default function App() {
 
   // Handler: Toggle Favorite
   const handleToggleFavorite = (contactId: string) => {
+    let toggled: Contact | null = null;
     const updated = contacts.map((c) => {
       if (c.id === contactId) {
         const nextFav = !c.isFavorite;
         showToast(nextFav ? `Añadido a favoritos` : `Quitado de favoritos`);
-        return { ...c, isFavorite: nextFav };
+        toggled = { ...c, isFavorite: nextFav };
+        return toggled;
       }
       return c;
     });
     updateContacts(updated);
+    if (toggled) upsertContact(toggled);
   };
 
   // Handler: Update Contact Observations
   const handleUpdateObservations = (contactId: string, observations: string) => {
-    const updated = contacts.map((c) =>
-      c.id === contactId
-        ? {
-            ...c,
-            observations,
-            updatedAt: new Date().toISOString(),
-          }
-        : c
-    );
+    let updatedContact: Contact | null = null;
+    const updated = contacts.map((c) => {
+      if (c.id === contactId) {
+        updatedContact = {
+          ...c,
+          observations,
+          updatedAt: new Date().toISOString(),
+        };
+        return updatedContact;
+      }
+      return c;
+    });
     updateContacts(updated);
+    if (updatedContact) upsertContact(updatedContact);
     if (selectedDetailContact && selectedDetailContact.id === contactId) {
       setSelectedDetailContact({ ...selectedDetailContact, observations });
     }
@@ -1189,9 +1193,11 @@ export default function App() {
 
         if (parsedData.contacts && parsedData.contacts.length > 0) {
           updateContacts(parsedData.contacts);
+          parsedData.contacts.forEach((c) => upsertContact(c));
         }
         if (parsedData.appointments && parsedData.appointments.length > 0) {
           updateAppointments(parsedData.appointments);
+          parsedData.appointments.forEach((a) => upsertAppointment(a));
         }
         if (parsedData.reminders && parsedData.reminders.length > 0) {
           updateReminders(parsedData.reminders);
