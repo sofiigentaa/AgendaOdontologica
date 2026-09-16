@@ -753,7 +753,7 @@ app.get('/api/contacts', requireSession, async (req, res) => {
     return res.json({ success: true, contacts: sharedAgendaStore.contacts || [] });
   }
   try {
-    const rows = await db.select().from(schema.contacts);
+    const rows = await db.select().from(schema.contacts).orderBy(schema.contacts.createdAt);
     res.json({ success: true, contacts: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
@@ -823,7 +823,7 @@ app.get('/api/appointments', requireSession, async (req, res) => {
     return res.json({ success: true, appointments: sharedAgendaStore.appointments || [] });
   }
   try {
-    const rows = await db.select().from(schema.appointments);
+    const rows = await db.select().from(schema.appointments).orderBy(schema.appointments.createdAt);
     res.json({ success: true, appointments: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
