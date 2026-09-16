@@ -742,6 +742,158 @@ app.delete('/api/sync/insurance-file/:id', requireSession, (req, res) => {
   }
 });
 
+// -------------------------------------------------------------
+// Endpoints por registro individual (Postgres = fuente de verdad)
+// Evitan que un dispositivo pise los cambios de otro: cada guardado
+// o borrado toca UN SOLO registro por id, no la lista completa.
+// -------------------------------------------------------------
+
+app.get('/api/contacts', requireSession, async (req, res) => {
+  if (!isDbConfigured) {
+    return res.json({ success: true, contacts: sharedAgendaStore.contacts || [] });
+  }
+  try {
+    const rows = await db.select().from(schema.contacts);
+    res.json({ success: true, contacts: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+app.post('/api/contacts', requireSession, async (req, res) => {
+  try {
+    const c = req.body;
+    if (!c || !c.id) return res.status(400).json({ success: false, error: 'Falta id' });
+    if (isDbConfigured) {
+      await db.insert(schema.contacts).values({
+        id: c.id,
+        fullName: c.fullName,
+        isParticular: c.isParticular ?? true,
+        insuranceName: c.insuranceName ?? null,
+        affiliateNumber: c.affiliateNumber ?? null,
+        primaryPhone: c.primaryPhone,
+        altPhone: c.altPhone ?? null,
+        email: c.email ?? null,
+        address: c.address ?? null,
+        observations: c.observations ?? null,
+        isFavorite: c.isFavorite ?? false,
+        avatarColor: c.avatarColor ?? null,
+        createdAt: c.createdAt || new Date().toISOString(),
+        updatedAt: c.updatedAt || new Date().toISOString(),
+      }).onConflictDoUpdate({
+        target: schema.contacts.id,
+        set: {
+          fullName: c.fullName,
+          isParticular: c.isParticular ?? true,
+          insuranceName: c.insuranceName ?? null,
+          affiliateNumber: c.affiliateNumber ?? null,
+          primaryPhone: c.primaryPhone,
+          altPhone: c.altPhone ?? null,
+          email: c.email ?? null,
+          address: c.address ?? null,
+          observations: c.observations ?? null,
+          isFavorite: c.isFavorite ?? false,
+          avatarColor: c.avatarColor ?? null,
+          updatedAt: c.updatedAt || new Date().toISOString(),
+        },
+      });
+    }
+    broadcastToSSEClients({ type: 'CONTACT_UPSERT', contact: c, timestamp: new Date().toISOString() });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+app.delete('/api/contacts/:id', requireSession, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isDbConfigured) {
+      await db.delete(schema.contacts).where(eq(schema.contacts.id, id));
+    }
+    broadcastToSSEClients({ type: 'CONTACT_DELETE', id, timestamp: new Date().toISOString() });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+app.get('/api/appointments', requireSession, async (req, res) => {
+  if (!isDbConfigured) {
+    return res.json({ success: true, appointments: sharedAgendaStore.appointments || [] });
+  }
+  try {
+    const rows = await db.select().from(schema.appointments);
+    res.json({ success: true, appointments: rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+app.post('/api/appointments', requireSession, async (req, res) => {
+  try {
+    const a = req.body;
+    if (!a || !a.id) return res.status(400).json({ success: false, error: 'Falta id' });
+    if (isDbConfigured) {
+      await db.insert(schema.appointments).values({
+        id: a.id,
+        contactId: a.contactId,
+        date: a.date,
+        time: a.time,
+        durationMinutes: a.durationMinutes ?? 30,
+        motive: a.motive ?? null,
+        dentist: a.dentist ?? null,
+        completed: a.completed ?? false,
+        whatsappStatus: a.whatsappStatus ?? null,
+        whatsappLastReply: a.whatsappLastReply ?? null,
+        createdAt: a.createdAt || new Date().toISOString(),
+        ingresos: a.ingresos ?? 0,
+        descartables: a.descartables ?? 0,
+        estampillas: a.estampillas ?? 0,
+        materiales: a.materiales ?? 0,
+        mecanicoDental: a.mecanicoDental ?? 0,
+        porcentajeHonorario: a.porcentajeHonorario ?? 50,
+      }).onConflictDoUpdate({
+        target: schema.appointments.id,
+        set: {
+          contactId: a.contactId,
+          date: a.date,
+          time: a.time,
+          durationMinutes: a.durationMinutes ?? 30,
+          motive: a.motive ?? null,
+          dentist: a.dentist ?? null,
+          completed: a.completed ?? false,
+          whatsappStatus: a.whatsappStatus ?? null,
+          whatsappLastReply: a.whatsappLastReply ?? null,
+          ingresos: a.ingresos ?? 0,
+          descartables: a.descartables ?? 0,
+          estampillas: a.estampillas ?? 0,
+          materiales: a.materiales ?? 0,
+          mecanicoDental: a.mecanicoDental ?? 0,
+          porcentajeHonorario: a.porcentajeHonorario ?? 50,
+        },
+      });
+    }
+    broadcastToSSEClients({ type: 'APPOINTMENT_UPSERT', appointment: a, timestamp: new Date().toISOString() });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+app.delete('/api/appointments/:id', requireSession, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isDbConfigured) {
+      await db.delete(schema.appointments).where(eq(schema.appointments.id, id));
+    }
+    broadcastToSSEClients({ type: 'APPOINTMENT_DELETE', id, timestamp: new Date().toISOString() });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
 // Clear / Wipe Database API Endpoints
 app.post('/api/db/clear', requireSession, async (req, res) => {
   try {
