@@ -199,6 +199,18 @@ export default function App() {
     return Array.from(map.values());
   }
 
+  // Orden FIJO y predecible (más nuevo primero, por createdAt), para que la
+  // posición de cada tarjeta no "salte" en pantalla cada vez que se combina
+  // con datos frescos del servidor. Sin esto, dos combinaciones sucesivas
+  // pueden devolver el mismo contenido en distinto orden.
+  function sortByCreatedAtDesc<T extends { createdAt?: string }>(list: T[]): T[] {
+    return [...list].sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tb - ta;
+    });
+  }
+
   // Toast state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
@@ -234,7 +246,7 @@ export default function App() {
     fetchContactsFresh().then((fresh) => {
       if (fresh.length === 0) return;
       setContacts((prev) => {
-        const merged = mergeById(fresh, prev);
+        const merged = sortByCreatedAtDesc(mergeById(fresh, prev));
         try { saveStoredContacts(merged); } catch {}
         return merged;
       });
@@ -436,7 +448,7 @@ export default function App() {
             }
           } else if (payload.type === 'CONTACT_UPSERT' && payload.contact) {
             setContacts((prev) => {
-              const merged = mergeById([payload.contact], prev);
+              const merged = sortByCreatedAtDesc(mergeById([payload.contact], prev));
               try { saveStoredContacts(merged); } catch {}
               return merged;
             });
@@ -621,8 +633,9 @@ export default function App() {
   // el guardado remoto real lo hacen upsertContact/deleteContactRemote,
   // llamados explícitamente desde cada handler más abajo).
   const updateContacts = (newContacts: Contact[]) => {
-    setContacts(newContacts);
-    saveStoredContacts(newContacts);
+    const sorted = sortByCreatedAtDesc(newContacts);
+    setContacts(sorted);
+    saveStoredContacts(sorted);
   };
 
   const updateReminders = (newReminders: CallReminder[]) => {
