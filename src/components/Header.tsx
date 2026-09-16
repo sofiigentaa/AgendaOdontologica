@@ -20,9 +20,11 @@ import {
   ChevronDown,
   Trash2,
   Database,
-  Lock
+  Lock,
+  Share2
 } from 'lucide-react';
 import { ViewMode, FilterType, MainTab } from '../types';
+import { ShareAppModal } from './ShareAppModal';
 
 interface HeaderProps {
   activeTab: MainTab;
@@ -102,6 +104,7 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
 }) => {
   const [isBackupMenuOpen, setIsBackupMenuOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const backupMenuRef = useRef<HTMLDivElement>(null);
@@ -309,6 +312,18 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Compartir App Link */}
+            <button
+              id="btn-share-app-header"
+              type="button"
+              onClick={() => setIsShareModalOpen(true)}
+              className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold border border-white/30 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+              title="Compartir enlace de la aplicación por WhatsApp o copiar link"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Compartir</span>
+            </button>
+
             {/* Direct Logout / Lock Button */}
             {onLogout && (
               <button
@@ -396,7 +411,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <Database className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <p className="font-bold text-slate-900 text-xs leading-tight">Copia Completa de Respaldo (.json)</p>
+                        <p className="font-bold text-slate-900 text-xs leading-tight">Copia Completa de Respaldo (.txt)</p>
                         <p className="text-[10.5px] text-slate-500 leading-tight">Guarda todos los datos para restaurar en cualquier momento</p>
                       </div>
                     </button>
@@ -413,8 +428,8 @@ export const Header: React.FC<HeaderProps> = ({
                         <Upload className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <p className="font-bold text-slate-900 text-xs leading-tight">Importar Copia de Seguridad (.json o .txt)</p>
-                        <p className="text-[10.5px] text-slate-500 leading-tight">Carga archivos .json o listas en .txt</p>
+                        <p className="font-bold text-slate-900 text-xs leading-tight">Importar Copia de Seguridad (.txt)</p>
+                        <p className="text-[10.5px] text-slate-500 leading-tight">Carga copias de respaldo o listas en .txt</p>
                       </div>
                     </button>
 
@@ -459,11 +474,11 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
 
-              {/* Hidden file input for JSON and TXT import */}
+              {/* Hidden file input for TXT import (backup or plain lists) */}
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".json,.txt"
+                accept=".txt"
                 onChange={onImportJson}
                 className="hidden"
               />
@@ -638,6 +653,12 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
       </div>
+
+      {/* Share Application Modal */}
+      <ShareAppModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+      />
     </header>
   );
 };
