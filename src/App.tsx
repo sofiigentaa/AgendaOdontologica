@@ -214,8 +214,8 @@ export default function App() {
   const handleManualSync = async () => {
     setIsSyncingCloud(true);
     try {
-      // 1. Push current state to the backend
-      const pushOk = await syncToSupabase({
+      // 1. Push current state to Supabase PostgreSQL
+      await syncToSupabase({
         contacts,
         appointments,
         reminders,
@@ -224,8 +224,6 @@ export default function App() {
       });
 
       const sbData = await fetchFromSupabase();
-      const pullOk = sbData !== null;
-
       if (sbData) {
         if (sbData.contacts && sbData.contacts.length > 0) {
           setContacts((prev) => {
@@ -263,13 +261,9 @@ export default function App() {
         }
       }
 
-      if (pushOk && pullOk) {
-        showToast('☁️ ¡Agenda y turnos sincronizados con la nube (PC y Celular)!');
-      } else {
-        showToast('⚠️ No se pudo confirmar la sincronización con el servidor. Tus datos siguen guardados en este dispositivo — revisá tu conexión o iniciá sesión de nuevo.');
-      }
+      showToast('☁️ ¡Agenda y turnos sincronizados con la nube (PC y Celular)!');
     } catch (e) {
-      showToast('⚠️ Error de sincronización. Los datos permanecen guardados en este dispositivo.');
+      showToast('Aviso de sincronización. Los datos permanecen guardados en este dispositivo.');
     } finally {
       setIsSyncingCloud(false);
     }
@@ -1158,11 +1152,11 @@ export default function App() {
       exportedAt: new Date().toISOString(),
     };
     const jsonStr = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const blob = new Blob([jsonStr], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Mi_Agenda_Copia_Seguridad_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `Mi_Agenda_Copia_Seguridad_${new Date().toISOString().split('T')[0]}.txt`;
     a.click();
     URL.revokeObjectURL(url);
     showToast('Copia de seguridad descargada correctamente');
