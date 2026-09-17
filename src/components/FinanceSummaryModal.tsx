@@ -12,8 +12,7 @@ import {
   Copy,
   Check,
   Share2,
-  Clock,
-  AlertCircle
+  Clock
 } from 'lucide-react';
 import { Appointment, Contact } from '../types';
 import {
@@ -21,9 +20,6 @@ import {
   calculateTurnStats,
   filterAppointmentsByFinanceMode,
   isApptAttended,
-  buildDentistPayoutBreakdown,
-  expensesExceedIncome,
-  sumExpenseLines,
 } from '../utils/finance';
 import { normalizeDentist } from '../utils/dentist';
 
@@ -142,16 +138,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
   };
 
   const handleSaveFinances = (apptId: string) => {
-    const lines = {
-      descartables: editDescartables,
-      estampillas: editEstampillas,
-      materiales: editMateriales,
-      mecanico: editMecanico,
-    };
-    if (expensesExceedIncome(editIngresos, lines)) {
-      alert('Los gastos no pueden ser mayores que lo cobrado. Bajá los egresos o aumentá el ingreso.');
-      return;
-    }
     onEditAppointmentFinances(apptId, {
       ingresos: editIngresos,
       descartables: editDescartables,
@@ -184,15 +170,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
   }, [dayAppointments, filterMode]);
 
   const dailyTotals = useMemo(() => calculateDailyTotals(dayAppointments), [dayAppointments]);
-
-  const yaniBreakdown = useMemo(
-    () => buildDentistPayoutBreakdown(dayAppointments, 'Yani', (id) => getContact(id)?.fullName || 'Paciente'),
-    [dayAppointments, contacts]
-  );
-  const marieBreakdown = useMemo(
-    () => buildDentistPayoutBreakdown(dayAppointments, 'Marie', (id) => getContact(id)?.fullName || 'Paciente'),
-    [dayAppointments, contacts]
-  );
 
   const formatMoney = (val: any) => {
     try {
@@ -229,16 +206,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
     text += `------------------------------------\n`;
     text += `👩‍⚕️ *Liquidación Dra. Marie:* ${formatMoney(dailyTotals.totMarie)}\n`;
     text += `👩‍⚕️ *Liquidación Dra. Yani:* ${formatMoney(dailyTotals.totYani)}\n`;
-    if (marieBreakdown.lines.length > 0) {
-      text += `   Marie: `;
-      text += marieBreakdown.lines.map((l) => `${l.patientName} ${formatMoney(l.share)}`).join(' + ');
-      text += ` = ${formatMoney(marieBreakdown.total)}\n`;
-    }
-    if (yaniBreakdown.lines.length > 0) {
-      text += `   Yani: `;
-      text += yaniBreakdown.lines.map((l) => `${l.patientName} ${formatMoney(l.share)}`).join(' + ');
-      text += ` = ${formatMoney(yaniBreakdown.total)}\n`;
-    }
     text += `------------------------------------\n`;
     text += `📝 *Detalle de Pacientes Atendidos:*\n`;
 
@@ -767,24 +734,9 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                               </div>
                             </div>
 
-                            <div className="flex flex-col gap-1 pt-2 border-t border-emerald-200">
-                              <div className="flex items-center justify-between">
-                              <span className={`text-xs font-bold ${
-                                expensesExceedIncome(editIngresos, {
-                                  descartables: editDescartables,
-                                  estampillas: editEstampillas,
-                                  materiales: editMateriales,
-                                  mecanico: editMecanico,
-                                })
-                                  ? 'text-rose-700'
-                                  : 'text-emerald-900'
-                              }`}>
-                                Subtotal Egresos: {formatMoney(sumExpenseLines({
-                                  descartables: editDescartables,
-                                  estampillas: editEstampillas,
-                                  materiales: editMateriales,
-                                  mecanico: editMecanico,
-                                }))}
+                            <div className="flex items-center justify-between pt-2 border-t border-emerald-200">
+                              <span className="text-xs text-emerald-900 font-bold">
+                                Subtotal Egresos: {formatMoney((editDescartables || 0) + (editEstampillas || 0) + (editMateriales || 0) + (editMecanico || 0))}
                               </span>
                               <div className="flex items-center gap-2">
                                 <button
@@ -802,7 +754,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                                   Guardar Montos
                                 </button>
                               </div>
-                              </div>
                             </div>
                           </div>
                         ) : (
@@ -816,9 +767,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                             <div className="p-1.5 sm:p-2 bg-rose-50 rounded-lg border border-rose-100">
                               <span className="text-[10px] text-slate-500 font-semibold block">Egresos:</span>
                               <span className="font-extrabold text-rose-800">{formatMoney(stats.totalEgresos)}</span>
-                              {stats.expensesWereClamped && (
-                                <span className="block text-[9px] font-bold text-rose-600 mt-0.5">Ajustado al cobrado</span>
-                              )}
                             </div>
 
                             <div className="p-1.5 sm:p-2 bg-slate-100 rounded-lg border border-slate-200">
@@ -942,43 +890,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                     </span>
                   </div>
                 </div>
-
-                {(yaniBreakdown.lines.length > 0 || marieBreakdown.lines.length > 0) && (
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-3">
-                    <p className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wide">
-                      Lo que cobra cada una
-                    </p>
-                    {([
-                      { label: 'Dra. Yani', color: 'emerald', data: yaniBreakdown },
-                      { label: 'Dra. Marie', color: 'blue', data: marieBreakdown },
-                    ] as const).map((block) =>
-                      block.data.lines.length === 0 ? null : (
-                        <div key={block.label} className="space-y-1">
-                          <span className={`text-[11px] font-black ${block.color === 'emerald' ? 'text-emerald-800' : 'text-blue-800'}`}>
-                            {block.label}
-                          </span>
-                          {block.data.lines.map((line) => (
-                            <div
-                              key={`${block.label}-${line.appointmentId}`}
-                              className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-800"
-                            >
-                              <span className="truncate">
-                                {line.patientName} ({line.time} hs)
-                              </span>
-                              <span className={block.color === 'emerald' ? 'text-emerald-800' : 'text-blue-800'}>
-                                {formatMoney(line.share)}
-                              </span>
-                            </div>
-                          ))}
-                          <div className={`flex items-center justify-between text-[11px] font-black border-t border-slate-100 pt-1 ${block.color === 'emerald' ? 'text-emerald-900' : 'text-blue-900'}`}>
-                            <span>Total {block.label}</span>
-                            <span>{formatMoney(block.data.total)}</span>
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
 
                 {/* List of Attended Patients */}
                 <div className="pt-2 space-y-1.5">

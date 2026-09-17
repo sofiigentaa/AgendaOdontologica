@@ -19,7 +19,6 @@ import { findConflictingAppointment } from '../utils/appointmentConflicts';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { CustomTimePicker } from './CustomTimePicker';
 import { normalizeDentist } from '../utils/dentist';
-import { expensesExceedIncome, sumExpenseLines } from '../utils/finance';
 
 interface ScheduleAppointmentModalProps {
   isOpen: boolean;
@@ -168,15 +167,6 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
   const quickTimePresets = ['08:30', '09:00', '10:00', '11:30', '14:00', '15:00', '16:30', '17:30'];
 
-  const expenseLines = {
-    descartables: Number(descartables) || 0,
-    estampillas: Number(estampillas) || 0,
-    materiales: Number(materiales) || 0,
-    mecanico: Number(mecanicoDental) || 0,
-  };
-  const gastosTurno = sumExpenseLines(expenseLines);
-  const gastosSuperanCobrado = expensesExceedIncome(Number(ingresos) || 0, expenseLines);
-
   const processSave = () => {
     const apptPayload = {
       contactId: selectedContactId,
@@ -223,10 +213,6 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
     }
     if (!time) {
       alert('Por favor selecciona un horario.');
-      return;
-    }
-    if (gastosSuperanCobrado) {
-      alert('Los gastos no pueden ser mayores que lo cobrado. Bajá los egresos o aumentá el ingreso.');
       return;
     }
 
@@ -739,11 +725,6 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Egresos del Turno ($)
               </label>
-              {gastosSuperanCobrado && (
-                <p className="mb-2 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1">
-                  Los gastos ({gastosTurno.toLocaleString('es-AR')}) no pueden superar lo cobrado. Ajustalos para poder guardar.
-                </p>
-              )}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
                   <span className="text-[10px] text-slate-500 block">Descartables:</span>
