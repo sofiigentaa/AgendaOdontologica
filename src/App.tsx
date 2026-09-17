@@ -58,6 +58,13 @@ import { initAuth, googleSignIn, logoutGoogle, getAccessToken } from './services
 import { createGoogleCalendarEvent, sendGmailAppointmentConfirmation } from './services/googleWorkspace';
 import { formatDateWithDayName, getTodayISO } from './utils/time';
 import { filterContacts } from './utils/contactFilters';
+import {
+  mergeByIdPreservingOrder,
+  pickIfUnchanged,
+  isSameContactRecord,
+  isSameAppointmentRecord,
+  isSameReminderRecord,
+} from './utils/listMerge';
 import { User } from 'firebase/auth';
 import { supabase } from './supabaseClient';
 import { 
@@ -188,27 +195,63 @@ export default function App() {
     });
   };
 
-  // Helper to merge two lists of records that have `id`, without losing local
-  // records that the server doesn't know about yet.
+  // Combina listas por id sin perder registros locales que el servidor aún no
+  // tiene, y SIN reordenar las tarjetas que ya están en pantalla.
   function mergeById<T extends { id: string }>(fresh: T[], prev: T[]): T[] {
-    const map = new Map<string, T>();
-    fresh.forEach((item) => map.set(item.id, item));
-    prev.forEach((item) => {
-      if (!map.has(item.id)) map.set(item.id, item);
-    });
-    return Array.from(map.values());
+    return mergeByIdPreservingOrder(fresh, prev);
   }
 
-  // Orden FIJO y predecible (más nuevo primero, por createdAt), para que la
-  // posición de cada tarjeta no "salte" en pantalla cada vez que se combina
-  // con datos frescos del servidor. Sin esto, dos combinaciones sucesivas
-  // pueden devolver el mismo contenido en distinto orden.
-  function sortByCreatedAtDesc<T extends { createdAt?: string }>(list: T[]): T[] {
-    return [...list].sort((a, b) => {
-      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return tb - ta;
+  function applyContactsFromSync(fresh: Contact[]) {
+    if (!fresh || fresh.length === 0) return;
+    setContacts((prev) => {
+      const merged = pickIfUnchanged(prev, mergeById(fresh, prev), isSameContactRecord);
+      if (merged !== prev) {
+        try { saveStoredContacts(merged); } catch {}
+      }
+      return merged;
     });
+  }
+
+  function applyAppointmentsFromSync(fresh: Appointment[]) {
+    if (!fresh || fresh.length === 0) return;
+    setAppointments((prev) => {
+      const mergedIncoming = mergeAppointmentsWithState(fresh, prev);
+      const fullMerged = pickIfUnchanged(prev, mergeById(mergedIncoming, prev), isSameAppointmentRecord);
+      if (fullMerged !== prev) {
+        try { saveStoredAppointments(fullMerged); } catch {}
+      }
+      return fullMerged;
+    });
+  }
+
+  function applyAuxiliaryAgenda(sbData: { reminders?: CallReminder[]; notes?: ContactNote[]; insuranceFiles?: InsuranceFolderFile[] } | null) {
+    if (!sbData) return;
+    if (sbData.reminders !== undefined) {
+      setReminders((prev) => {
+        const merged = pickIfUnchanged(prev, mergeById(sbData.reminders || [], prev), isSameReminderRecord);
+        if (merged !== prev) {
+          try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(merged)); } catch {}
+        }
+        return merged;
+      });
+    }
+    if (sbData.notes && sbData.notes.length > 0) {
+      setNotes((prev) => {
+        const merged = pickIfUnchanged(
+          prev,
+          mergeById(sbData.notes || [], prev),
+          (a, b) => a.text === b.text && a.color === b.color && a.contactId === b.contactId
+        );
+        if (merged !== prev) {
+          try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(merged)); } catch {}
+        }
+        return merged;
+      });
+    }
+    if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
+      setInsuranceFiles(sbData.insuranceFiles);
+      saveStoredInsuranceFiles(sbData.insuranceFiles);
+    }
   }
 
   // Toast state
@@ -244,22 +287,11 @@ export default function App() {
   // sin borrar nada que el dispositivo tenga y el servidor todavía no.
   const syncFreshContactsAndAppointments = () => {
     fetchContactsFresh().then((fresh) => {
-      if (fresh.length === 0) return;
-      setContacts((prev) => {
-        const merged = sortByCreatedAtDesc(mergeById(fresh, prev));
-        try { saveStoredContacts(merged); } catch {}
-        return merged;
-      });
+      applyContactsFromSync(fresh);
     });
 
     fetchAppointmentsFresh().then((fresh) => {
-      if (fresh.length === 0) return;
-      setAppointments((prev) => {
-        const merged = mergeAppointmentsWithState(fresh, prev);
-        const fullMerged = mergeById(merged, prev);
-        try { saveStoredAppointments(fullMerged); } catch {}
-        return fullMerged;
-      });
+      applyAppointmentsFromSync(fresh);
     });
   };
 
@@ -278,20 +310,7 @@ export default function App() {
       syncFreshContactsAndAppointments();
 
       const sbData = await fetchFromSupabase();
-      if (sbData) {
-        if (sbData.reminders !== undefined) {
-          setReminders(sbData.reminders);
-          try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
-        }
-        if (sbData.notes && sbData.notes.length > 0) {
-          setNotes(sbData.notes);
-          try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(sbData.notes)); } catch {}
-        }
-        if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
-          setInsuranceFiles(sbData.insuranceFiles);
-          saveStoredInsuranceFiles(sbData.insuranceFiles);
-        }
-      }
+      applyAuxiliaryAgenda(sbData);
 
       showToast('☁️ ¡Agenda y turnos sincronizados con la nube (PC y Celular)!');
     } catch (e) {
@@ -309,20 +328,7 @@ export default function App() {
 
       // Recordatorios, notas y archivos de obra social: sistema anterior
       fetchFromSupabase().then((sbData) => {
-        if (sbData) {
-          if (sbData.reminders !== undefined) {
-            setReminders(sbData.reminders);
-            try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
-          }
-          if (sbData.notes && sbData.notes.length > 0) {
-            setNotes(sbData.notes);
-            try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(sbData.notes)); } catch {}
-          }
-          if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
-            setInsuranceFiles(sbData.insuranceFiles);
-            saveStoredInsuranceFiles(sbData.insuranceFiles);
-          }
-        }
+        applyAuxiliaryAgenda(sbData);
       }).catch(() => {});
     };
 
@@ -383,18 +389,7 @@ export default function App() {
     // (sync como lista completa vía /api/sync/agenda)
     fetchFromSupabase().then((sbData) => {
       if (sbData) {
-        if (sbData.reminders !== undefined) {
-          setReminders(sbData.reminders);
-          try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
-        }
-        if (sbData.notes && sbData.notes.length > 0) {
-          setNotes(sbData.notes);
-          try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(sbData.notes)); } catch {}
-        }
-        if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
-          setInsuranceFiles(sbData.insuranceFiles);
-          saveStoredInsuranceFiles(sbData.insuranceFiles);
-        }
+        applyAuxiliaryAgenda(sbData);
       } else {
         // Si el backend no tenía nada, sembramos con el dataset local
         syncToSupabase({
@@ -405,88 +400,67 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // 3. Suscripción en tiempo real (SSE) - reemplaza a Supabase Realtime
-    const unsubscribeSupabaseRealtime = subscribeToSupabaseRealtime(() => {
-      // Cualquier evento relevante dispara un refresco fresco por id
-      syncFreshContactsAndAppointments();
-      fetchFromSupabase().then((sbData) => {
-        if (sbData) {
-          if (sbData.reminders !== undefined) {
-            setReminders(sbData.reminders);
-            try { localStorage.setItem('mi_agenda_reminders_v6', JSON.stringify(sbData.reminders)); } catch {}
-          }
-          if (sbData.notes && sbData.notes.length > 0) {
-            setNotes(sbData.notes);
-            try { localStorage.setItem('mi_agenda_notes_v6', JSON.stringify(sbData.notes)); } catch {}
-          }
-          if (sbData.insuranceFiles && sbData.insuranceFiles.length > 0) {
-            setInsuranceFiles(sbData.insuranceFiles);
-            saveStoredInsuranceFiles(sbData.insuranceFiles);
-          }
-        }
-      }).catch(() => {});
-    });
+    // 3. Un solo canal SSE. No reordenar ni refrescar la lista completa en cada
+    // evento: eso hacía que las tarjetas de pacientes saltaran de lugar.
 
-    // 4. Connect to Server-Sent Events (SSE) stream for instant real-time pushes (e.g. when patient clicks Confirm/Cancel on WhatsApp link)
-    let sseSource: EventSource | null = null;
-    try {
-      sseSource = new EventSource('/api/sync/events');
-      sseSource.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          if (payload.type === 'APPOINTMENT_CONFIRMED') {
-            const data = payload.data || {};
-            showToast(`🟢 ¡Turno Confirmado! ${data.patientName || 'El paciente'} confirmó su asistencia para el día ${data.date || ''} a las ${data.time || ''} hs.`);
-            if (payload.agenda?.appointments) {
-              setAppointments((prev) => mergeById(payload.agenda.appointments, prev));
-            }
-          } else if (payload.type === 'APPOINTMENT_CANCELLED') {
-            const data = payload.data || {};
-            showToast(`🔴 Turno Cancelado: ${data.patientName || 'El paciente'} canceló su turno del día ${data.date || ''} a las ${data.time || ''} hs.`);
-            if (payload.agenda?.appointments) {
-              setAppointments((prev) => mergeById(payload.agenda.appointments, prev));
-            }
-          } else if (payload.type === 'CONTACT_UPSERT' && payload.contact) {
-            setContacts((prev) => {
-              const merged = sortByCreatedAtDesc(mergeById([payload.contact], prev));
-              try { saveStoredContacts(merged); } catch {}
-              return merged;
-            });
-          } else if (payload.type === 'CONTACT_DELETE' && payload.id) {
-            setContacts((prev) => {
-              const updated = prev.filter((c) => c.id !== payload.id);
-              try { saveStoredContacts(updated); } catch {}
-              return updated;
-            });
-          } else if (payload.type === 'APPOINTMENT_UPSERT' && payload.appointment) {
-            setAppointments((prev) => {
-              const merged = mergeById([payload.appointment], prev);
-              try { saveStoredAppointments(merged); } catch {}
-              return merged;
-            });
-          } else if (payload.type === 'APPOINTMENT_DELETE' && payload.id) {
-            setAppointments((prev) => {
-              const updated = prev.filter((a) => a.id !== payload.id);
-              try { saveStoredAppointments(updated); } catch {}
-              return updated;
-            });
-          } else if (payload.type === 'AGENDA_UPDATE' && payload.data) {
-            if (payload.data.appointments) {
-              setAppointments((prev) => mergeById(payload.data.appointments, prev));
-            }
-            if (payload.data.contacts) {
-              setContacts((prev) => mergeById(payload.data.contacts, prev));
-            }
-          }
-        } catch {}
-      };
-    } catch {}
+    const unsubscribeSupabaseRealtime = subscribeToSupabaseRealtime((payload) => {
+      if (!payload || !payload.type) return;
+
+      if (payload.type === 'APPOINTMENT_CONFIRMED') {
+        const data = payload.data || {};
+        showToast(`🟢 ¡Turno Confirmado! ${data.patientName || 'El paciente'} confirmó su asistencia para el día ${data.date || ''} a las ${data.time || ''} hs.`);
+        if (payload.agenda?.appointments) {
+          applyAppointmentsFromSync(payload.agenda.appointments);
+        } else if (payload.appointment) {
+          applyAppointmentsFromSync([payload.appointment]);
+        }
+        return;
+      }
+
+      if (payload.type === 'APPOINTMENT_CANCELLED') {
+        const data = payload.data || {};
+        showToast(`🔴 Turno Cancelado: ${data.patientName || 'El paciente'} canceló su turno del día ${data.date || ''} a las ${data.time || ''} hs.`);
+        if (payload.agenda?.appointments) {
+          applyAppointmentsFromSync(payload.agenda.appointments);
+        } else if (payload.appointment) {
+          applyAppointmentsFromSync([payload.appointment]);
+        }
+        return;
+      }
+
+      if (payload.type === 'CONTACT_UPSERT' && payload.contact) {
+        applyContactsFromSync([payload.contact]);
+        return;
+      }
+      if (payload.type === 'CONTACT_DELETE' && payload.id) {
+        setContacts((prev) => {
+          const updated = prev.filter((c) => c.id !== payload.id);
+          try { saveStoredContacts(updated); } catch {}
+          return updated;
+        });
+        return;
+      }
+      if (payload.type === 'APPOINTMENT_UPSERT' && payload.appointment) {
+        applyAppointmentsFromSync([payload.appointment]);
+        return;
+      }
+      if (payload.type === 'APPOINTMENT_DELETE' && payload.id) {
+        setAppointments((prev) => {
+          const updated = prev.filter((a) => a.id !== payload.id);
+          try { saveStoredAppointments(updated); } catch {}
+          return updated;
+        });
+        return;
+      }
+      if ((payload.type === 'AGENDA_UPDATE' || payload.type === 'INITIAL_SYNC') && payload.data) {
+        if (payload.data.contacts) applyContactsFromSync(payload.data.contacts);
+        if (payload.data.appointments) applyAppointmentsFromSync(payload.data.appointments);
+        applyAuxiliaryAgenda(payload.data);
+      }
+    });
 
     return () => {
       unsubscribeSupabaseRealtime();
-      if (sseSource) {
-        sseSource.close();
-      }
     };
   }, []);
 
@@ -633,9 +607,8 @@ export default function App() {
   // el guardado remoto real lo hacen upsertContact/deleteContactRemote,
   // llamados explícitamente desde cada handler más abajo).
   const updateContacts = (newContacts: Contact[]) => {
-    const sorted = sortByCreatedAtDesc(newContacts);
-    setContacts(sorted);
-    saveStoredContacts(sorted);
+    setContacts(newContacts);
+    saveStoredContacts(newContacts);
   };
 
   const updateReminders = (newReminders: CallReminder[]) => {

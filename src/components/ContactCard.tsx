@@ -113,7 +113,7 @@ export const ContactCard: React.FC<ContactCardProps> = ({
       <div 
         id={`contact-card-${contact.id}`}
         onClick={() => onViewDetails(contact)}
-        className="group relative bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 hover:border-[#4CAF7D] shadow-2xs hover:shadow-md hover-lift transition-all duration-200 overflow-hidden flex flex-col cursor-pointer active-touch-scale"
+        className="group relative bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 hover:border-[#4CAF7D] shadow-2xs hover:shadow-md hover-lift overflow-hidden flex flex-col cursor-pointer active-touch-scale"
       >
         {/* Top Header Card Background Accent */}
         <div className="h-10 bg-gradient-to-r from-emerald-50/90 to-teal-50/70 group-hover:from-emerald-100/80 group-hover:to-teal-100/60 transition-colors relative p-2 px-3 flex justify-end items-center gap-1.5 border-b border-emerald-100/50">
@@ -314,7 +314,7 @@ export const ContactCard: React.FC<ContactCardProps> = ({
     <div 
       id={`contact-item-${contact.id}`}
       onClick={() => onViewDetails(contact)}
-      className="group bg-white rounded-xl border border-slate-200 hover:border-[#4CAF7D] shadow-2xs hover:shadow-sm transition-all p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
+      className="group bg-white rounded-xl border border-slate-200 hover:border-[#4CAF7D] shadow-2xs hover:shadow-sm transition-colors p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
         

@@ -120,23 +120,15 @@ export async function clearAppointmentsFromSupabase(): Promise<void> {
  * Realtime via SSE (Server-Sent Events) en vez de Supabase Realtime.
  * El backend ya expone /api/sync/events con broadcast en cada cambio.
  */
-export function subscribeToSupabaseRealtime(onSync: () => void): () => void {
+export function subscribeToSupabaseRealtime(onEvent: (payload: any) => void): () => void {
   let es: EventSource | null = null;
   try {
     es = new EventSource('/api/sync/events', { withCredentials: true } as any);
     es.onmessage = (evt) => {
       try {
         const parsed = JSON.parse(evt.data);
-        if (
-          parsed.type === 'AGENDA_UPDATE' ||
-          parsed.type === 'INITIAL_SYNC' ||
-          parsed.type === 'INSURANCE_FILES_UPDATE' ||
-          parsed.type === 'CONTACT_UPSERT' ||
-          parsed.type === 'CONTACT_DELETE' ||
-          parsed.type === 'APPOINTMENT_UPSERT' ||
-          parsed.type === 'APPOINTMENT_DELETE'
-        ) {
-          onSync();
+        if (parsed && parsed.type) {
+          onEvent(parsed);
         }
       } catch {}
     };
