@@ -156,34 +156,55 @@ function supabaseEnv() {
   return { url, key };
 }
 
-function patchSupabaseAppointment(id: string, body: Record<string, unknown>) {
-  const sb = supabaseEnv();
-  if (!sb) return;
-  fetch(`${sb.url}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: {
-      apikey: sb.key,
-      Authorization: `Bearer ${sb.key}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify(body),
-  }).catch(() => {});
+function supabaseHeaders(sb: { url: string; key: string }) {
+  return {
+    apikey: sb.key,
+    Authorization: `Bearer ${sb.key}`,
+    'Content-Type': 'application/json',
+    Prefer: 'resolution=merge-duplicates,return=minimal',
+  };
 }
 
-function upsertSupabaseAppointmentRow(row: Record<string, unknown>) {
+async function upsertSupabaseTable(table: string, row: Record<string, unknown>) {
   const sb = supabaseEnv();
   if (!sb) return;
-  fetch(`${sb.url}/rest/v1/appointments`, {
-    method: 'POST',
-    headers: {
-      apikey: sb.key,
-      Authorization: `Bearer ${sb.key}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal',
-    },
-    body: JSON.stringify(row),
-  }).catch(() => {});
+  try {
+    const res = await fetch(`${sb.url}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: supabaseHeaders(sb),
+      body: JSON.stringify(row),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      console.warn(`Supabase upsert ${table} ${res.status}:`, detail.slice(0, 300));
+    }
+  } catch (err: any) {
+    console.warn(`Supabase upsert ${table}:`, err?.message);
+  }
+}
+
+function contactToSupabaseRow(c: any) {
+  return {
+    id: c.id,
+    name: c.fullName || '',
+    full_name: c.fullName || '',
+    phone: c.primaryPhone || '',
+    primary_phone: c.primaryPhone || '',
+    alt_phone: c.altPhone || '',
+    email: c.email || '',
+    address: c.address || '',
+    notes: JSON.stringify(c),
+    observations: c.observations || '',
+    insurance: c.insuranceName || (c.isParticular ? 'Particular' : ''),
+    insurance_name: c.insuranceName || (c.isParticular ? 'Particular' : ''),
+    affiliate_number: c.affiliateNumber || '',
+    avatar: c.avatarColor || '',
+    avatar_color: c.avatarColor || '',
+    is_particular: c.isParticular ?? true,
+    is_favorite: c.isFavorite ?? false,
+    created_at: c.createdAt || new Date().toISOString(),
+    updated_at: c.updatedAt || new Date().toISOString(),
+  };
 }
 
 function appointmentToSupabaseRow(a: any) {
@@ -211,8 +232,27 @@ function appointmentToSupabaseRow(a: any) {
   };
 }
 
+function patchSupabaseAppointment(id: string, body: Record<string, unknown>) {
+  const sb = supabaseEnv();
+  if (!sb) return;
+  fetch(`${sb.url}/rest/v1/appointments?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: sb.key,
+      Authorization: `Bearer ${sb.key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
+
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, dbAvailable: isDbConfigured });
+  res.json({
+    ok: true,
+    dbAvailable: isDbConfigured,
+    supabaseConfigured: Boolean(supabaseEnv()),
+  });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -471,13 +511,18 @@ async function writeAppointmentRow(clean: any) {
       },
     });
   }
-  upsertSupabaseAppointmentRow(appointmentToSupabaseRow(clean));
+  await upsertSupabaseTable('appointments', appointmentToSupabaseRow(clean));
 }
 
 /** Ajusta gastos de turnos ya cargados y crea Marie / Las dos si no hay ninguno. */
 async function repairLoadedAgenda() {
   const contacts = sharedAgendaStore.contacts || [];
   let appointments = (sharedAgendaStore.appointments || []).map((a: any) => sanitizeAppointmentWrite(a));
+
+  for (const contact of contacts) {
+    if (!contact?.id) continue;
+    await upsertSupabaseTable('contacts', contactToSupabaseRow(contact));
+  }
 
   for (const clean of appointments) {
     try {
