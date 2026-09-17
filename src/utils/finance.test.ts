@@ -47,13 +47,12 @@ describe('calculateTurnStats', () => {
       appt({ ingresos: 100, descartables: 400, estampillas: 0, materiales: 0, mecanicoDental: 0 })
     );
     expect(stats.balanceNeto).toBe(0);
-    // Con neto 0 se liquida el % sobre lo cobrado, para que no queden Marie y Yani en $0
-    expect(stats.honorarioTotal).toBe(50);
-    expect(stats.correspondyMarie).toBe(50);
+    expect(stats.honorarioTotal).toBe(0);
+    expect(stats.correspondyMarie).toBe(0);
     expect(stats.correspondyYani).toBe(0);
   });
 
-  it('pays 100% of the honorario to Yani when she attended alone', () => {
+  it('pays Yani nothing when her turn spent more than it collected', () => {
     const stats = calculateTurnStats(
       appt({
         dentist: 'Yani',
@@ -66,7 +65,7 @@ describe('calculateTurnStats', () => {
       })
     );
     expect(stats.balanceNeto).toBe(0);
-    expect(stats.correspondyYani).toBeCloseTo(7225.91, 2);
+    expect(stats.correspondyYani).toBe(0);
     expect(stats.correspondyMarie).toBe(0);
   });
 
@@ -115,23 +114,23 @@ describe('calculateDailyTotals', () => {
       appt({ id: 'h3', dentist: 'Yani', ingresos: 4243.86, descartables: 5260.16, estampillas: 0, materiales: 0, mecanicoDental: 0 }),
     ]);
     expect(totals.totMarie).toBe(0);
-    expect(totals.totYani).toBeCloseTo(7225.91, 2);
+    expect(totals.totYani).toBe(0);
     expect(totals.totNeto).toBe(0);
   });
 });
 
 describe('buildDentistPayoutBreakdown', () => {
-  it('explains Yani total from each attended patient', () => {
+  it('lists each Yani patient and sums only profit-based honorarios', () => {
     const list = [
-      appt({ id: 'h1', contactId: 'c1', dentist: 'Yani', ingresos: 3323.99, descartables: 6000, time: '13:00' }),
-      appt({ id: 'h2', contactId: 'c2', dentist: 'Yani', ingresos: 6883.97, descartables: 7000, time: '16:00' }),
+      appt({ id: 'h1', contactId: 'c1', dentist: 'Yani', ingresos: 10000, descartables: 2000, estampillas: 0, materiales: 0, mecanicoDental: 0, time: '13:00' }),
+      appt({ id: 'h2', contactId: 'c2', dentist: 'Yani', ingresos: 3000, descartables: 5000, estampillas: 0, materiales: 0, mecanicoDental: 0, time: '16:00' }),
     ];
     const names: Record<string, string> = { c1: 'Hernán Díaz', c2: 'Lucía López' };
     const breakdown = buildDentistPayoutBreakdown(list, 'Yani', (id) => names[id] || 'Paciente');
-    expect(breakdown.lines).toHaveLength(2);
-    expect(breakdown.lines[0].patientName).toBe('Hernán Díaz');
-    expect(breakdown.lines[0].honorarioBaseKind).toBe('cobrado');
-    expect(breakdown.total).toBeCloseTo(breakdown.lines[0].share + breakdown.lines[1].share, 2);
+    expect(breakdown.lines.map((l) => l.patientName)).toEqual(['Hernán Díaz', 'Lucía López']);
+    expect(breakdown.lines[0].share).toBe(4000);
+    expect(breakdown.lines[1].share).toBe(0);
+    expect(breakdown.total).toBe(4000);
   });
 });
 
