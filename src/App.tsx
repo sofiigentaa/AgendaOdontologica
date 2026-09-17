@@ -182,18 +182,24 @@ export default function App() {
 
     return incomingAppts.map((inc) => {
       const curr = currentMap.get(inc.id);
-      const next = sanitizeAppointmentWrite(inc);
-      if (!curr) return next;
+      if (!curr) return inc;
 
-      // If current in-memory status is confirmed or cancelled, and incoming has pending/null, preserve the updated status
+      const incomingCompleted = inc.completed;
+      const completed =
+        incomingCompleted === undefined || incomingCompleted === null
+          ? curr.completed
+          : Boolean(incomingCompleted);
+
       if (curr.whatsappStatus && curr.whatsappStatus !== 'pending' && (!inc.whatsappStatus || inc.whatsappStatus === 'pending')) {
         return {
-          ...next,
+          ...inc,
+          completed,
+          dentist: inc.dentist || curr.dentist,
           whatsappStatus: curr.whatsappStatus,
-          whatsappLastReply: curr.whatsappLastReply || next.whatsappLastReply,
+          whatsappLastReply: curr.whatsappLastReply || inc.whatsappLastReply,
         };
       }
-      return next;
+      return { ...inc, completed, dentist: inc.dentist || curr.dentist };
     });
   };
 
@@ -459,7 +465,6 @@ export default function App() {
       }
       if ((payload.type === 'AGENDA_UPDATE' || payload.type === 'INITIAL_SYNC') && payload.data) {
         if (payload.data.contacts) applyContactsFromSync(payload.data.contacts);
-        if (payload.data.appointments) applyAppointmentsFromSync(payload.data.appointments);
         applyAuxiliaryAgenda(payload.data);
       }
     });
@@ -778,16 +783,15 @@ export default function App() {
   };
 
   const handleToggleAppointmentComplete = (appointmentId: string) => {
-    let toggled: Appointment | null = null;
-    const updated = appointments.map((a) => {
-      if (a.id === appointmentId) {
-        toggled = { ...a, completed: !a.completed };
-        return toggled;
-      }
-      return a;
+    setAppointments((prev) => {
+      const updated = prev.map((a) =>
+        a.id === appointmentId ? { ...a, completed: !a.completed } : a
+      );
+      const toggled = updated.find((a) => a.id === appointmentId);
+      saveStoredAppointments(updated);
+      if (toggled) upsertAppointment(toggled);
+      return updated;
     });
-    updateAppointments(updated);
-    if (toggled) upsertAppointment(toggled);
     showToast('Estado del turno actualizado');
   };
 

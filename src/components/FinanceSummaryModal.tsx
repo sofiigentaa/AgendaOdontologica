@@ -325,8 +325,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
             </div>
 
             {/* Filter Toggle for any date */}
-            {dayAppointments.length > 0 && (
-              <div className="flex items-center gap-1 bg-emerald-950/80 p-0.5 rounded-lg border border-emerald-800">
+            <div className="flex items-center gap-1 bg-emerald-950/80 p-0.5 rounded-lg border border-emerald-800">
                 <button
                   type="button"
                   onClick={() => setFilterMode('all')}
@@ -361,8 +360,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                   Pendientes ({pendingCount})
                 </button>
               </div>
-            )}
-          </div>
+            </div>
 
           {/* Subheader counts */}
           <div className="flex items-center justify-between text-[11px] px-0.5 text-emerald-200">

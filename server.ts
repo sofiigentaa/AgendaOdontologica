@@ -300,6 +300,20 @@ let sharedAgendaStore: {
 
 const sharedInsuranceFilesMap = new Map<string, any>();
 
+function upsertStoreAppointment(a: any) {
+  if (!a?.id) return;
+  const list = sharedAgendaStore.appointments || [];
+  const idx = list.findIndex((x: any) => x.id === a.id);
+  if (idx >= 0) {
+    const next = list.slice();
+    next[idx] = { ...list[idx], ...a };
+    sharedAgendaStore.appointments = next;
+  } else {
+    sharedAgendaStore.appointments = [a, ...list];
+  }
+  sharedAgendaStore.lastUpdated = new Date().toISOString();
+}
+
 function saveToDiskBackup() {
   try {
     const insuranceFiles = Array.from(sharedInsuranceFilesMap.values());
@@ -1032,12 +1046,11 @@ app.delete('/api/contacts/:id', requireSession, async (req, res) => {
 
 app.get('/api/appointments', requireSession, async (req, res) => {
   if (!isDbConfigured) {
-    const local = (sharedAgendaStore.appointments || []).map((row: any) => sanitizeAppointmentWrite(row));
-    return res.json({ success: true, appointments: local });
+    return res.json({ success: true, appointments: sharedAgendaStore.appointments || [] });
   }
   try {
     const rows = await db.select().from(schema.appointments).orderBy(schema.appointments.createdAt);
-    res.json({ success: true, appointments: rows.map((row) => sanitizeAppointmentWrite(row)) });
+    res.json({ success: true, appointments: rows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
   }
@@ -1087,6 +1100,7 @@ app.post('/api/appointments', requireSession, async (req, res) => {
         },
       });
     }
+    upsertStoreAppointment(a);
     broadcastToSSEClients({ type: 'APPOINTMENT_UPSERT', appointment: a, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
