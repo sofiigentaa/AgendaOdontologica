@@ -6,6 +6,8 @@ import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { db, schema, isDbConfigured } from './src/db/index.ts';
 import { eq, sql } from 'drizzle-orm';
+import { sanitizeAppointmentWrite } from './src/utils/finance.ts';
+import { normalizeDentist } from './src/utils/dentist.ts';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -154,6 +156,82 @@ function supabaseEnv() {
   return { url, key };
 }
 
+function supabaseHeaders(sb: { url: string; key: string }) {
+  return {
+    apikey: sb.key,
+    Authorization: `Bearer ${sb.key}`,
+    'Content-Type': 'application/json',
+    Prefer: 'resolution=merge-duplicates,return=minimal',
+  };
+}
+
+async function upsertSupabaseTable(table: string, row: Record<string, unknown>) {
+  const sb = supabaseEnv();
+  if (!sb) return;
+  try {
+    const res = await fetch(`${sb.url}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: supabaseHeaders(sb),
+      body: JSON.stringify(row),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      console.warn(`Supabase upsert ${table} ${res.status}:`, detail.slice(0, 300));
+    }
+  } catch (err: any) {
+    console.warn(`Supabase upsert ${table}:`, err?.message);
+  }
+}
+
+function contactToSupabaseRow(c: any) {
+  return {
+    id: c.id,
+    name: c.fullName || '',
+    full_name: c.fullName || '',
+    phone: c.primaryPhone || '',
+    primary_phone: c.primaryPhone || '',
+    alt_phone: c.altPhone || '',
+    email: c.email || '',
+    address: c.address || '',
+    notes: JSON.stringify(c),
+    observations: c.observations || '',
+    insurance: c.insuranceName || (c.isParticular ? 'Particular' : ''),
+    insurance_name: c.insuranceName || (c.isParticular ? 'Particular' : ''),
+    affiliate_number: c.affiliateNumber || '',
+    avatar: c.avatarColor || '',
+    avatar_color: c.avatarColor || '',
+    is_particular: c.isParticular ?? true,
+    is_favorite: c.isFavorite ?? false,
+    created_at: c.createdAt || new Date().toISOString(),
+    updated_at: c.updatedAt || new Date().toISOString(),
+  };
+}
+
+function appointmentToSupabaseRow(a: any) {
+  return {
+    id: a.id,
+    contact_id: a.contactId,
+    title: a.dentist || 'Marie',
+    dentist: a.dentist || 'Marie',
+    date: a.date,
+    time: a.time,
+    duration: a.durationMinutes || 30,
+    duration_minutes: a.durationMinutes || 30,
+    motive: a.motive || '',
+    treatment: a.motive || '',
+    notes: JSON.stringify(a),
+    status: a.completed ? 'completed' : a.whatsappStatus === 'cancelled' ? 'cancelled' : 'scheduled',
+    completed: Boolean(a.completed),
+    ingresos: a.ingresos || 0,
+    descartables: a.descartables || 0,
+    estampillas: a.estampillas || 0,
+    materiales: a.materiales || 0,
+    mecanico_dental: a.mecanicoDental || 0,
+    porcentaje_honorario: a.porcentajeHonorario ?? 50,
+    created_at: a.createdAt || new Date().toISOString(),
+  };
+}
+
 function patchSupabaseAppointment(id: string, body: Record<string, unknown>) {
   const sb = supabaseEnv();
   if (!sb) return;
@@ -170,7 +248,11 @@ function patchSupabaseAppointment(id: string, body: Record<string, unknown>) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, dbAvailable: isDbConfigured });
+  res.json({
+    ok: true,
+    dbAvailable: isDbConfigured,
+    supabaseConfigured: Boolean(supabaseEnv()),
+  });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -217,6 +299,20 @@ let sharedAgendaStore: {
 } = {};
 
 const sharedInsuranceFilesMap = new Map<string, any>();
+
+function upsertStoreAppointment(a: any) {
+  if (!a?.id) return;
+  const list = sharedAgendaStore.appointments || [];
+  const idx = list.findIndex((x: any) => x.id === a.id);
+  if (idx >= 0) {
+    const next = list.slice();
+    next[idx] = { ...list[idx], ...a };
+    sharedAgendaStore.appointments = next;
+  } else {
+    sharedAgendaStore.appointments = [a, ...list];
+  }
+  sharedAgendaStore.lastUpdated = new Date().toISOString();
+}
 
 function saveToDiskBackup() {
   try {
@@ -372,7 +468,7 @@ async function initStoreFromDatabase() {
 
     sharedAgendaStore = {
       contacts: contactsData || [],
-      appointments: appointmentsData || [],
+      appointments: (appointmentsData || []).map((a) => sanitizeAppointmentWrite(a)),
       reminders: remindersData || [],
       notes: notesData || [],
       attachments: attachmentsData || [],
@@ -385,6 +481,128 @@ async function initStoreFromDatabase() {
       console.warn('Initial load from Cloud SQL:', err?.message);
     }
   }
+}
+
+async function writeAppointmentRow(clean: any) {
+  if (!clean?.id || !clean.contactId) return;
+  if (isDbConfigured) {
+    await db.insert(schema.appointments).values({
+      id: clean.id,
+      contactId: clean.contactId,
+      date: clean.date,
+      time: clean.time,
+      durationMinutes: clean.durationMinutes ?? 30,
+      motive: clean.motive ?? null,
+      dentist: clean.dentist ?? 'Marie',
+      completed: clean.completed ?? false,
+      whatsappStatus: clean.whatsappStatus ?? null,
+      whatsappLastReply: clean.whatsappLastReply ?? null,
+      createdAt: clean.createdAt || new Date().toISOString(),
+      ingresos: clean.ingresos ?? 0,
+      descartables: clean.descartables ?? 0,
+      estampillas: clean.estampillas ?? 0,
+      materiales: clean.materiales ?? 0,
+      mecanicoDental: clean.mecanicoDental ?? 0,
+      porcentajeHonorario: clean.porcentajeHonorario ?? 50,
+    }).onConflictDoUpdate({
+      target: schema.appointments.id,
+      set: {
+        contactId: clean.contactId,
+        date: clean.date,
+        time: clean.time,
+        durationMinutes: clean.durationMinutes ?? 30,
+        motive: clean.motive ?? null,
+        dentist: clean.dentist ?? 'Marie',
+        completed: clean.completed ?? false,
+        whatsappStatus: clean.whatsappStatus ?? null,
+        whatsappLastReply: clean.whatsappLastReply ?? null,
+        ingresos: clean.ingresos ?? 0,
+        descartables: clean.descartables ?? 0,
+        estampillas: clean.estampillas ?? 0,
+        materiales: clean.materiales ?? 0,
+        mecanicoDental: clean.mecanicoDental ?? 0,
+        porcentajeHonorario: clean.porcentajeHonorario ?? 50,
+      },
+    });
+  }
+  await upsertSupabaseTable('appointments', appointmentToSupabaseRow(clean));
+}
+
+/** Ajusta gastos de turnos ya cargados y crea Marie / Las dos si no hay ninguno. */
+async function repairLoadedAgenda() {
+  const contacts = sharedAgendaStore.contacts || [];
+  let appointments = (sharedAgendaStore.appointments || []).map((a: any) => sanitizeAppointmentWrite(a));
+
+  for (const contact of contacts) {
+    if (!contact?.id) continue;
+    await upsertSupabaseTable('contacts', contactToSupabaseRow(contact));
+  }
+
+  for (const clean of appointments) {
+    try {
+      await writeAppointmentRow(clean);
+    } catch (err: any) {
+      console.warn('No se pudo reparar turno', clean?.id, err?.message);
+    }
+  }
+
+  const present = new Set(appointments.map((a: any) => normalizeDentist(a.dentist)));
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+  const firstContact = contacts[0];
+  const secondContact = contacts[1] || contacts[0];
+
+  const seeds: any[] = [];
+  if (firstContact?.id && !present.has('Marie')) {
+    seeds.push({
+      id: 'appt-seed-marie',
+      contactId: firstContact.id,
+      date: today,
+      time: '07:00',
+      durationMinutes: 30,
+      motive: 'Consulta Marie',
+      dentist: 'Marie',
+      completed: false,
+      createdAt: new Date().toISOString(),
+      ingresos: 0,
+      descartables: 0,
+      estampillas: 0,
+      materiales: 0,
+      mecanicoDental: 0,
+      porcentajeHonorario: 100,
+    });
+  }
+  if (secondContact?.id && !present.has('Ambas')) {
+    seeds.push({
+      id: 'appt-seed-ambas',
+      contactId: secondContact.id,
+      date: today,
+      time: '07:30',
+      durationMinutes: 30,
+      motive: 'Consulta las dos',
+      dentist: 'Ambas',
+      completed: false,
+      createdAt: new Date().toISOString(),
+      ingresos: 0,
+      descartables: 0,
+      estampillas: 0,
+      materiales: 0,
+      mecanicoDental: 0,
+      porcentajeHonorario: 50,
+    });
+  }
+
+  for (const seed of seeds) {
+    const clean = sanitizeAppointmentWrite(seed);
+    try {
+      await writeAppointmentRow(clean);
+      appointments = [...appointments, clean];
+    } catch (err: any) {
+      console.warn('No se pudo crear turno de prueba', clean?.id, err?.message);
+    }
+  }
+
+  sharedAgendaStore.appointments = appointments;
+  sharedAgendaStore.lastUpdated = new Date().toISOString();
 }
 
 // Background persist to Cloud SQL without blocking HTTP responses
@@ -432,42 +650,43 @@ async function persistToCloudSql(payload: any) {
 
     if (Array.isArray(appointments)) {
       for (const a of appointments) {
+        const clean = sanitizeAppointmentWrite(a);
         await db.insert(schema.appointments).values({
-          id: a.id,
-          contactId: a.contactId,
-          date: a.date,
-          time: a.time,
-          durationMinutes: a.durationMinutes ?? 30,
-          motive: a.motive ?? null,
-          dentist: a.dentist ?? null,
-          completed: a.completed ?? false,
-          whatsappStatus: a.whatsappStatus ?? null,
-          whatsappLastReply: a.whatsappLastReply ?? null,
-          createdAt: a.createdAt || new Date().toISOString(),
-          ingresos: a.ingresos ?? 0,
-          descartables: a.descartables ?? 0,
-          estampillas: a.estampillas ?? 0,
-          materiales: a.materiales ?? 0,
-          mecanicoDental: a.mecanicoDental ?? 0,
-          porcentajeHonorario: a.porcentajeHonorario ?? 50,
+          id: clean.id,
+          contactId: clean.contactId,
+          date: clean.date,
+          time: clean.time,
+          durationMinutes: clean.durationMinutes ?? 30,
+          motive: clean.motive ?? null,
+          dentist: clean.dentist ?? 'Marie',
+          completed: clean.completed ?? false,
+          whatsappStatus: clean.whatsappStatus ?? null,
+          whatsappLastReply: clean.whatsappLastReply ?? null,
+          createdAt: clean.createdAt || new Date().toISOString(),
+          ingresos: clean.ingresos ?? 0,
+          descartables: clean.descartables ?? 0,
+          estampillas: clean.estampillas ?? 0,
+          materiales: clean.materiales ?? 0,
+          mecanicoDental: clean.mecanicoDental ?? 0,
+          porcentajeHonorario: clean.porcentajeHonorario ?? 50,
         }).onConflictDoUpdate({
           target: schema.appointments.id,
           set: {
-            contactId: a.contactId,
-            date: a.date,
-            time: a.time,
-            durationMinutes: a.durationMinutes ?? 30,
-            motive: a.motive ?? null,
-            dentist: a.dentist ?? null,
-            completed: a.completed ?? false,
-            whatsappStatus: a.whatsappStatus ?? null,
-            whatsappLastReply: a.whatsappLastReply ?? null,
-            ingresos: a.ingresos ?? 0,
-            descartables: a.descartables ?? 0,
-            estampillas: a.estampillas ?? 0,
-            materiales: a.materiales ?? 0,
-            mecanicoDental: a.mecanicoDental ?? 0,
-            porcentajeHonorario: a.porcentajeHonorario ?? 50,
+            contactId: clean.contactId,
+            date: clean.date,
+            time: clean.time,
+            durationMinutes: clean.durationMinutes ?? 30,
+            motive: clean.motive ?? null,
+            dentist: clean.dentist ?? 'Marie',
+            completed: clean.completed ?? false,
+            whatsappStatus: clean.whatsappStatus ?? null,
+            whatsappLastReply: clean.whatsappLastReply ?? null,
+            ingresos: clean.ingresos ?? 0,
+            descartables: clean.descartables ?? 0,
+            estampillas: clean.estampillas ?? 0,
+            materiales: clean.materiales ?? 0,
+            mecanicoDental: clean.mecanicoDental ?? 0,
+            porcentajeHonorario: clean.porcentajeHonorario ?? 50,
           },
         });
       }
@@ -634,10 +853,14 @@ app.post('/api/sync/agenda', requireSession, (req, res) => {
 
     const currentFiles = Array.from(sharedInsuranceFilesMap.values());
 
+    const sanitizedAppointments = Array.isArray(payload.appointments)
+      ? payload.appointments.map((a: any) => sanitizeAppointmentWrite(a))
+      : undefined;
+
     sharedAgendaStore = {
       ...sharedAgendaStore,
       ...(payload.contacts !== undefined ? { contacts: payload.contacts } : {}),
-      ...(payload.appointments !== undefined ? { appointments: payload.appointments } : {}),
+      ...(sanitizedAppointments !== undefined ? { appointments: sanitizedAppointments } : {}),
       ...(payload.reminders !== undefined ? { reminders: payload.reminders } : {}),
       ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
       ...(payload.attachments !== undefined ? { attachments: payload.attachments } : {}),
@@ -656,7 +879,10 @@ app.post('/api/sync/agenda', requireSession, (req, res) => {
 
     // Save to disk backup and cloud in background
     saveToDiskBackup();
-    persistToCloudSql(payload).catch(() => {});
+    persistToCloudSql({
+      ...payload,
+      ...(sanitizedAppointments !== undefined ? { appointments: sanitizedAppointments } : {}),
+    }).catch(() => {});
 
     res.json({ success: true, lastUpdated: sharedAgendaStore.lastUpdated });
   } catch (err: any) {
@@ -832,7 +1058,7 @@ app.get('/api/appointments', requireSession, async (req, res) => {
 
 app.post('/api/appointments', requireSession, async (req, res) => {
   try {
-    const a = req.body;
+    const a = sanitizeAppointmentWrite(req.body);
     if (!a || !a.id) return res.status(400).json({ success: false, error: 'Falta id' });
     if (isDbConfigured) {
       await db.insert(schema.appointments).values({
@@ -842,8 +1068,8 @@ app.post('/api/appointments', requireSession, async (req, res) => {
         time: a.time,
         durationMinutes: a.durationMinutes ?? 30,
         motive: a.motive ?? null,
-        dentist: a.dentist ?? null,
-        completed: a.completed ?? false,
+        dentist: a.dentist ?? 'Marie',
+        completed: Boolean(a.completed),
         whatsappStatus: a.whatsappStatus ?? null,
         whatsappLastReply: a.whatsappLastReply ?? null,
         createdAt: a.createdAt || new Date().toISOString(),
@@ -861,8 +1087,8 @@ app.post('/api/appointments', requireSession, async (req, res) => {
           time: a.time,
           durationMinutes: a.durationMinutes ?? 30,
           motive: a.motive ?? null,
-          dentist: a.dentist ?? null,
-          completed: a.completed ?? false,
+          dentist: a.dentist ?? 'Marie',
+          completed: Boolean(a.completed),
           whatsappStatus: a.whatsappStatus ?? null,
           whatsappLastReply: a.whatsappLastReply ?? null,
           ingresos: a.ingresos ?? 0,
@@ -874,6 +1100,7 @@ app.post('/api/appointments', requireSession, async (req, res) => {
         },
       });
     }
+    upsertStoreAppointment(a);
     broadcastToSSEClients({ type: 'APPOINTMENT_UPSERT', appointment: a, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
@@ -1454,6 +1681,7 @@ async function startServer() {
   assertProductionSecrets();
   loadFromDiskBackup();
   await initStoreFromDatabase();
+  await repairLoadedAgenda();
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

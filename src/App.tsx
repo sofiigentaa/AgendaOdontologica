@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   getStoredContacts, 
   saveStoredContacts, 
@@ -44,6 +44,7 @@ import { ScheduleAppointmentModal } from './components/ScheduleAppointmentModal'
 import { QuickNoteModal } from './components/QuickNoteModal';
 import { exportNextDayAppointmentsPlainFile, exportContactsPlainFile } from './utils/exportHelpers';
 import { parseImportFileContent } from './utils/fileImporter';
+import { sanitizeAppointmentWrite } from './utils/finance';
 import { ShareContactModal } from './components/ShareContactModal';
 import { InsuranceFolderModal } from './components/InsuranceFolderModal';
 import { FinanceSummaryModal } from './components/FinanceSummaryModal';
@@ -106,6 +107,22 @@ export default function App() {
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [attachments, setAttachments] = useState<ContactAttachment[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const completedLocksRef = useRef(new Map<string, { value: boolean; until: number }>());
+
+  const lockAppointmentCompleted = (id: string, value: boolean) => {
+    completedLocksRef.current.set(id, { value, until: Date.now() + 60_000 });
+  };
+
+  const resolveCompleted = (id: string, incoming: boolean | undefined | null, current?: boolean) => {
+    const lock = completedLocksRef.current.get(id);
+    if (lock) {
+      if (Date.now() < lock.until) return lock.value;
+      completedLocksRef.current.delete(id);
+    }
+    if (incoming === undefined || incoming === null) return Boolean(current);
+    if (Boolean(current) && !incoming) return true;
+    return Boolean(incoming);
+  };
   const [insuranceFiles, setInsuranceFiles] = useState<InsuranceFolderFile[]>([]);
 
   // Google Workspace state
@@ -183,15 +200,18 @@ export default function App() {
       const curr = currentMap.get(inc.id);
       if (!curr) return inc;
 
-      // If current in-memory status is confirmed or cancelled, and incoming has pending/null, preserve the updated status
+      const completed = resolveCompleted(inc.id, inc.completed, curr.completed);
+
       if (curr.whatsappStatus && curr.whatsappStatus !== 'pending' && (!inc.whatsappStatus || inc.whatsappStatus === 'pending')) {
         return {
           ...inc,
+          completed,
+          dentist: inc.dentist || curr.dentist,
           whatsappStatus: curr.whatsappStatus,
           whatsappLastReply: curr.whatsappLastReply || inc.whatsappLastReply,
         };
       }
-      return inc;
+      return { ...inc, completed, dentist: inc.dentist || curr.dentist };
     });
   };
 
@@ -352,7 +372,7 @@ export default function App() {
     const localReminders = getStoredReminders();
     const localNotes = getStoredNotes();
     const localAttachments = getStoredAttachments();
-    const localAppointments = getStoredAppointments();
+    const localAppointments = getStoredAppointments().map((a) => sanitizeAppointmentWrite(a));
     const localInsuranceFiles = getStoredInsuranceFiles();
 
     setContacts(localContacts);
@@ -360,6 +380,9 @@ export default function App() {
     setNotes(localNotes);
     setAttachments(localAttachments);
     setAppointments(localAppointments);
+    if (localAppointments.length > 0) {
+      try { saveStoredAppointments(localAppointments); } catch {}
+    }
     setInsuranceFiles(localInsuranceFiles);
 
     // Sync large files from IndexedDB if available
@@ -454,7 +477,6 @@ export default function App() {
       }
       if ((payload.type === 'AGENDA_UPDATE' || payload.type === 'INITIAL_SYNC') && payload.data) {
         if (payload.data.contacts) applyContactsFromSync(payload.data.contacts);
-        if (payload.data.appointments) applyAppointmentsFromSync(payload.data.appointments);
         applyAuxiliaryAgenda(payload.data);
       }
     });
@@ -716,7 +738,7 @@ export default function App() {
     let updatedAppt: Appointment | null = null;
     const updated = appointments.map((a) => {
       if (a.id === appointmentId) {
-        updatedAppt = { ...a, ...financialData };
+        updatedAppt = sanitizeAppointmentWrite({ ...a, ...financialData });
         return updatedAppt;
       }
       return a;
@@ -749,18 +771,23 @@ export default function App() {
     const targetId = data.appointmentId || appointmentId;
     if (targetId) {
       const existing = appointments.find((a) => a.id === targetId);
-      const updatedAppt = { ...existing, ...data, id: targetId } as Appointment;
+      const updatedAppt = sanitizeAppointmentWrite({
+        ...existing,
+        ...data,
+        id: targetId,
+        dentist: data.dentist || existing?.dentist || 'Marie',
+      } as Appointment);
       const updated = appointments.map((a) => (a.id === targetId ? updatedAppt : a));
       updateAppointments(updated);
       upsertAppointment(updatedAppt);
       showToast('Turno actualizado en el calendario');
     } else {
-      const newAppt: Appointment = {
+      const newAppt = sanitizeAppointmentWrite({
         id: `appt-${Date.now()}`,
-        dentist: (data.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Marie',
         ...data,
+        dentist: data.dentist || 'Marie',
         createdAt: new Date().toISOString(),
-      };
+      } as Appointment);
       updateAppointments([newAppt, ...appointments]);
       upsertAppointment(newAppt);
       showToast('Nuevo turno agendado en el calendario');
@@ -768,17 +795,14 @@ export default function App() {
   };
 
   const handleToggleAppointmentComplete = (appointmentId: string) => {
-    let toggled: Appointment | null = null;
-    const updated = appointments.map((a) => {
-      if (a.id === appointmentId) {
-        toggled = { ...a, completed: !a.completed };
-        return toggled;
-      }
-      return a;
-    });
-    updateAppointments(updated);
-    if (toggled) upsertAppointment(toggled);
-    showToast('Estado del turno actualizado');
+    const current = appointments.find((a) => a.id === appointmentId);
+    if (!current) return;
+    const nextCompleted = !Boolean(current.completed);
+    lockAppointmentCompleted(appointmentId, nextCompleted);
+    const toggled = { ...current, completed: nextCompleted };
+    updateAppointments(appointments.map((a) => (a.id === appointmentId ? toggled : a)));
+    upsertAppointment(toggled);
+    showToast(nextCompleted ? '¡Turno marcado como atendido!' : 'Turno marcado como pendiente');
   };
 
   const handleDeleteAppointment = (appointmentId: string) => {
@@ -878,17 +902,17 @@ export default function App() {
     }
 
     if (payload.appointment && payload.appointment.date && contactId) {
-      const newAppt: Appointment = {
+      const newAppt = sanitizeAppointmentWrite({
         id: `appt-${Date.now()}`,
         contactId,
         date: payload.appointment.date,
         time: payload.appointment.time || '10:00',
         durationMinutes: 30,
         motive: payload.appointment.motive || payload.patient.notes || 'Consulta odontológica',
-        dentist: (payload.appointment as any).dentist || 'Yani',
+        dentist: (payload.appointment as any).dentist || 'Marie',
         completed: false,
         createdAt: new Date().toISOString(),
-      };
+      } as Appointment);
 
       updateAppointments([newAppt, ...appointments]);
       upsertAppointment(newAppt);

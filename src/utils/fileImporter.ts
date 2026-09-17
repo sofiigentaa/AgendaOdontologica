@@ -1,5 +1,7 @@
 import { Contact, Appointment } from '../types';
 import { getTodayISO } from './time';
+import { normalizeDentist } from './dentist';
+import { sanitizeAppointmentWrite } from './finance';
 
 export interface ParsedImportData {
   contacts?: Contact[];
@@ -35,14 +37,14 @@ function createContact(partial: any, index: number = 0): Contact {
 }
 
 function normalizeAppointment(partial: any, index: number = 0): Appointment {
-  return {
+  return sanitizeAppointmentWrite({
     id: partial.id || `appt-${Date.now()}-${index}`,
     contactId: partial.contactId || partial.patientId || '',
     date: partial.date || getTodayISO(),
     time: partial.time || '09:00',
     durationMinutes: Number(partial.durationMinutes) || 30,
     motive: partial.motive || partial.treatment || 'Consulta general',
-    dentist: partial.dentist || 'Yani',
+    dentist: normalizeDentist(partial.dentist),
     completed: Boolean(partial.completed),
     ingresos: Number(partial.ingresos) || 0,
     descartables: Number(partial.descartables) || 0,
@@ -56,7 +58,7 @@ function normalizeAppointment(partial: any, index: number = 0): Appointment {
     whatsappStatus: partial.whatsappStatus || 'pending',
     whatsappLastReply: partial.whatsappLastReply,
     createdAt: partial.createdAt || new Date().toISOString(),
-  };
+  });
 }
 
 function detectTxtListingDate(trimmed: string): string {
