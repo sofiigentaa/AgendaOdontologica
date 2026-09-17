@@ -62,11 +62,9 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
       : 50;
   const pctPercent = isNaN(rawPct) ? 50 : Math.min(100, Math.max(0, rawPct));
 
-  // Si el turno dio ganancia, el honorario es % de esa ganancia.
-  // Si los gastos comieron el neto, igual se liquida % de lo cobrado: si no,
-  // Marie y Yani quedan ambas en $0 aunque haya pacientes atendidos.
-  const honorarioBase = balanceNeto > 0 ? balanceNeto : ingresos;
-  const honorarioBaseKind: HonorarioBaseKind = balanceNeto > 0 ? 'ganancia' : 'cobrado';
+  // Solo se paga honorario si el turno dejó ganancia (cobrado > gastos).
+  const honorarioBase = balanceNeto;
+  const honorarioBaseKind: HonorarioBaseKind = 'ganancia';
   const honorarioTotal = honorarioBase * (pctPercent / 100);
 
   let correspondyYani = 0;
@@ -174,8 +172,12 @@ export function buildDentistPayoutBreakdown(
   (dayAppointments || []).forEach((appt) => {
     if (!isApptAttended(appt)) return;
     const s = calculateTurnStats(appt);
+    const assigned =
+      dentist === 'Yani'
+        ? s.dentist === 'Yani' || s.dentist === 'Ambas'
+        : s.dentist === 'Marie' || s.dentist === 'Ambas';
+    if (!assigned) return;
     const share = dentist === 'Yani' ? s.correspondyYani : s.correspondyMarie;
-    if (!(share > 0)) return;
     total += share;
     lines.push({
       appointmentId: appt.id,
