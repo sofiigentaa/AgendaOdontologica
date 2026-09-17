@@ -21,6 +21,7 @@ import {
   calculateTurnStats,
   filterAppointmentsByFinanceMode,
   isApptAttended,
+  buildDentistPayoutBreakdown,
 } from '../utils/finance';
 
 interface FinanceSummaryModalProps {
@@ -171,6 +172,15 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
 
   const dailyTotals = useMemo(() => calculateDailyTotals(dayAppointments), [dayAppointments]);
 
+  const yaniBreakdown = useMemo(
+    () => buildDentistPayoutBreakdown(dayAppointments, 'Yani', (id) => getContact(id)?.fullName || 'Paciente'),
+    [dayAppointments, contacts]
+  );
+  const marieBreakdown = useMemo(
+    () => buildDentistPayoutBreakdown(dayAppointments, 'Marie', (id) => getContact(id)?.fullName || 'Paciente'),
+    [dayAppointments, contacts]
+  );
+
   const formatMoney = (val: any) => {
     try {
       const num = typeof val === 'number' ? val : Number(val);
@@ -206,6 +216,25 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
     text += `------------------------------------\n`;
     text += `👩‍⚕️ *Liquidación Dra. Marie:* ${formatMoney(dailyTotals.totMarie)}\n`;
     text += `👩‍⚕️ *Liquidación Dra. Yani:* ${formatMoney(dailyTotals.totYani)}\n`;
+    text += `------------------------------------\n`;
+    const explainLine = (line: (typeof yaniBreakdown.lines)[number]) => {
+      const baseLabel = line.honorarioBaseKind === 'ganancia' ? 'ganancia del turno' : 'lo cobrado';
+      return `   • ${line.patientName} (${line.time} hs): ${line.pctPercent}% de ${baseLabel} ${formatMoney(line.honorarioBase)} = ${formatMoney(line.share)}`;
+    };
+    if (marieBreakdown.lines.length > 0) {
+      text += `🔎 *De dónde sale el total de Marie:*\n`;
+      marieBreakdown.lines.forEach((line) => {
+        text += `${explainLine(line)}\n`;
+      });
+      text += `   *Total Marie:* ${formatMoney(marieBreakdown.total)}\n`;
+    }
+    if (yaniBreakdown.lines.length > 0) {
+      text += `🔎 *De dónde sale el total de Yani:*\n`;
+      yaniBreakdown.lines.forEach((line) => {
+        text += `${explainLine(line)}\n`;
+      });
+      text += `   *Total Yani:* ${formatMoney(yaniBreakdown.total)}\n`;
+    }
     text += `------------------------------------\n`;
     text += `📝 *Detalle de Pacientes Atendidos:*\n`;
 
@@ -890,6 +919,56 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {(yaniBreakdown.lines.length > 0 || marieBreakdown.lines.length > 0) && (
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-3">
+                    <p className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wide">
+                      De dónde sale el total a pagar
+                    </p>
+                    <p className="text-[10.5px] text-slate-600 leading-snug">
+                      Si el turno dejó ganancia (cobrado menos gastos), se paga el % de esa ganancia.
+                      Si los gastos superan lo cobrado, se paga el % de lo cobrado, para que no quede en $0.
+                    </p>
+                    {([
+                      { label: 'Dra. Yani', color: 'emerald', data: yaniBreakdown },
+                      { label: 'Dra. Marie', color: 'blue', data: marieBreakdown },
+                    ] as const).map((block) =>
+                      block.data.lines.length === 0 ? null : (
+                        <div key={block.label} className="space-y-1.5">
+                          <span className={`text-[11px] font-black ${block.color === 'emerald' ? 'text-emerald-800' : 'text-blue-800'}`}>
+                            {block.label}
+                          </span>
+                          {block.data.lines.map((line) => (
+                            <div
+                              key={`${block.label}-${line.appointmentId}`}
+                              className="p-2 rounded-lg border border-slate-100 bg-slate-50/80 text-[11px] space-y-0.5"
+                            >
+                              <div className="flex items-center justify-between gap-2 font-bold text-slate-800">
+                                <span className="truncate">
+                                  {line.patientName} ({line.time} hs)
+                                  {line.dentist === 'Ambas' ? ' · Ambas' : ''}
+                                </span>
+                                <span className={block.color === 'emerald' ? 'text-emerald-800' : 'text-blue-800'}>
+                                  {formatMoney(line.share)}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 font-medium">
+                                Cobrado {formatMoney(line.ingresos)} − gastos {formatMoney(line.egresos)}
+                                {' → '}
+                                {line.pctPercent}% de {line.honorarioBaseKind === 'ganancia' ? 'la ganancia' : 'lo cobrado'}
+                                {' '}({formatMoney(line.honorarioBase)})
+                              </p>
+                            </div>
+                          ))}
+                          <div className={`flex items-center justify-between text-[11px] font-black pt-0.5 ${block.color === 'emerald' ? 'text-emerald-900' : 'text-blue-900'}`}>
+                            <span>Total {block.label}</span>
+                            <span>{formatMoney(block.data.total)}</span>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
 
                 {/* List of Attended Patients */}
                 <div className="pt-2 space-y-1.5">
