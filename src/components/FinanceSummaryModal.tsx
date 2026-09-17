@@ -909,6 +909,11 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                           <div key={appt.id} className="p-2 bg-white rounded-lg border border-slate-200 flex items-center justify-between text-[11px]">
                             <span className="font-bold text-slate-800 truncate max-w-[180px]">
                               {i + 1}. {contact?.fullName || 'Paciente'} ({appt.time} hs)
+                              {stats.dentist === 'Ambas'
+                                ? ' · Ambas'
+                                : stats.dentist === 'Marie'
+                                  ? ' · Marie'
+                                  : ' · Yani'}
                             </span>
                             <span className="font-mono font-bold text-emerald-700">
                               {formatMoney(stats.ingresos)}

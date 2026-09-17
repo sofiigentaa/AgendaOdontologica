@@ -46,7 +46,33 @@ describe('calculateTurnStats', () => {
       appt({ ingresos: 100, descartables: 400, estampillas: 0, materiales: 0, mecanicoDental: 0 })
     );
     expect(stats.balanceNeto).toBe(0);
-    expect(stats.honorarioTotal).toBe(0);
+    // Con neto 0 se liquida el % sobre lo cobrado, para que no queden Marie y Yani en $0
+    expect(stats.honorarioTotal).toBe(50);
+    expect(stats.correspondyMarie).toBe(50);
+    expect(stats.correspondyYani).toBe(0);
+  });
+
+  it('pays 100% of the honorario to Yani when she attended alone', () => {
+    const stats = calculateTurnStats(
+      appt({
+        dentist: 'Yani',
+        ingresos: 14451.82,
+        descartables: 18260.16,
+        estampillas: 0,
+        materiales: 0,
+        mecanicoDental: 0,
+        porcentajeHonorario: 50,
+      })
+    );
+    expect(stats.balanceNeto).toBe(0);
+    expect(stats.correspondyYani).toBeCloseTo(7225.91, 2);
+    expect(stats.correspondyMarie).toBe(0);
+  });
+
+  it('recognizes dentist names written in different casing', () => {
+    const stats = calculateTurnStats(appt({ dentist: 'dra. marie' }));
+    expect(stats.correspondyMarie).toBe(4500);
+    expect(stats.correspondyYani).toBe(0);
   });
 
   it('defaults honorario percent to 50', () => {
@@ -79,6 +105,17 @@ describe('calculateDailyTotals', () => {
     expect(totals.totIngresos).toBe(14000);
     expect(totals.totMarie).toBe(4500);
     expect(totals.totYani).toBe(2000);
+  });
+
+  it('sends the full day honorario to Yani when every attended patient is hers', () => {
+    const totals = calculateDailyTotals([
+      appt({ id: 'h1', dentist: 'Yani', ingresos: 3323.99, descartables: 6000, estampillas: 0, materiales: 0, mecanicoDental: 0 }),
+      appt({ id: 'h2', dentist: 'Yani', ingresos: 6883.97, descartables: 7000, estampillas: 0, materiales: 0, mecanicoDental: 0 }),
+      appt({ id: 'h3', dentist: 'Yani', ingresos: 4243.86, descartables: 5260.16, estampillas: 0, materiales: 0, mecanicoDental: 0 }),
+    ]);
+    expect(totals.totMarie).toBe(0);
+    expect(totals.totYani).toBeCloseTo(7225.91, 2);
+    expect(totals.totNeto).toBe(0);
   });
 });
 

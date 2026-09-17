@@ -22,6 +22,15 @@ export function isApptAttended(appt: Appointment): boolean {
   return Boolean(appt?.completed);
 }
 
+export function normalizeDentist(dentist?: string | null): 'Yani' | 'Marie' | 'Ambas' {
+  const raw = String(dentist || '').trim().toLowerCase();
+  if (raw.includes('ambas') || raw.includes('las dos') || raw.includes('marie y yani') || raw.includes('yani y marie')) {
+    return 'Ambas';
+  }
+  if (raw.includes('marie')) return 'Marie';
+  return 'Yani';
+}
+
 export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats {
   if (!appt) {
     return {
@@ -53,13 +62,18 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
     appt.porcentajeHonorario !== undefined && appt.porcentajeHonorario !== null
       ? Number(appt.porcentajeHonorario)
       : 50;
-  const pctPercent = isNaN(rawPct) ? 50 : rawPct;
-  const honorarioTotal = balanceNeto * (pctPercent / 100);
+  const pctPercent = isNaN(rawPct) ? 50 : Math.min(100, Math.max(0, rawPct));
+
+  // Si el turno dio ganancia, el honorario es % de esa ganancia.
+  // Si los gastos comieron el neto, igual se liquida % de lo cobrado: si no,
+  // Marie y Yani quedan ambas en $0 aunque haya pacientes atendidos.
+  const honorarioBase = balanceNeto > 0 ? balanceNeto : ingresos;
+  const honorarioTotal = honorarioBase * (pctPercent / 100);
 
   let correspondyYani = 0;
   let correspondyMarie = 0;
 
-  const dentist = appt.dentist || 'Yani';
+  const dentist = normalizeDentist(appt.dentist);
   if (dentist === 'Ambas') {
     correspondyYani = honorarioTotal / 2;
     correspondyMarie = honorarioTotal / 2;
