@@ -1,4 +1,5 @@
 import { Appointment } from '../types';
+import { normalizeDentist } from './dentist';
 
 export type FinanceFilterMode = 'all' | 'attendedOnly' | 'pendingOnly';
 
@@ -24,15 +25,6 @@ export interface TurnFinanceStats {
 
 export function isApptAttended(appt: Appointment): boolean {
   return Boolean(appt?.completed);
-}
-
-export function normalizeDentist(dentist?: string | null): 'Yani' | 'Marie' | 'Ambas' {
-  const raw = String(dentist || '').trim().toLowerCase();
-  if (raw.includes('ambas') || raw.includes('las dos') || raw.includes('marie y yani') || raw.includes('yani y marie')) {
-    return 'Ambas';
-  }
-  if (raw.includes('marie')) return 'Marie';
-  return 'Yani';
 }
 
 export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats {

@@ -29,6 +29,7 @@ import {
 import { Appointment, Contact } from '../types';
 import { OBRAS_SOCIALES_LIST } from '../constants/insurances';
 import { getAppointmentTimeRange, formatDuration, formatDateDDMMYYYY, formatDateWithDayName } from '../utils/time';
+import { matchesDentistFilter, normalizeDentist } from '../utils/dentist';
 import { exportNextDayAppointmentsPlainFile } from '../utils/exportHelpers';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { DateJumpWidget } from './DateJumpWidget';
@@ -286,11 +287,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const filteredAppointments = useMemo(() => {
     return appointments.filter((appt) => {
       const contact = getContact(appt.contactId);
-      const nameMatch = contact ? contact.fullName.toLowerCase().includes(searchTerm.toLowerCase()) : false;
-      const motiveMatch = appt.motive ? appt.motive.toLowerCase().includes(searchTerm.toLowerCase()) : false;
-      const matchesSearch = nameMatch || motiveMatch;
-
-      if (!matchesSearch) return false;
+      const query = searchTerm.trim().toLowerCase();
+      if (query) {
+        const nameMatch = contact ? contact.fullName.toLowerCase().includes(query) : false;
+        const motiveMatch = appt.motive ? appt.motive.toLowerCase().includes(query) : false;
+        if (!nameMatch && !motiveMatch) return false;
+      }
 
       if (selectedInsuranceFilter === 'particular') {
         if (contact && !contact.isParticular) return false;
@@ -304,17 +306,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         }
       }
 
-      if (selectedDentistFilter !== 'all') {
-        const d = (appt.dentist || 'Yani').trim().toLowerCase();
-        const f = selectedDentistFilter.trim().toLowerCase();
-        if (f === 'ambas') {
-          if (d !== 'ambas') return false;
-        } else if (f === 'marie') {
-          if (d !== 'marie' && d !== 'ambas') return false;
-        } else if (f === 'yani') {
-          if (d !== 'yani' && d !== 'ambas') return false;
-        }
-      }
+      if (!matchesDentistFilter(appt.dentist, selectedDentistFilter)) return false;
 
       if (selectedMotiveFilter !== 'all') {
         const m = (appt.motive || '').toLowerCase();
@@ -909,9 +901,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             <span
                               key={a.id}
                               className={`w-1.5 h-1.5 rounded-full ${
-                                a.dentist === 'Ambas'
+                                normalizeDentist(a.dentist) === 'Ambas'
                                   ? 'bg-purple-600'
-                                  : a.dentist === 'Marie'
+                                  : normalizeDentist(a.dentist) === 'Marie'
                                   ? 'bg-blue-600'
                                   : 'bg-emerald-600'
                               }`}
@@ -933,7 +925,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     <div className="hidden sm:block space-y-1 flex-1 overflow-hidden">
                       {dayAppts.map((appt) => {
                         const contact = getContact(appt.contactId);
-                        const dentistName = appt.dentist || 'Yani';
+                        const dentistName = normalizeDentist(appt.dentist);
                         const isAmbas = dentistName === 'Ambas';
                         const isYani = dentistName === 'Yani';
                         const isCancelled = appt.whatsappStatus === 'cancelled';
@@ -1153,11 +1145,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             </span>
 
                             {/* Dentist Badge */}
-                            {(appt.dentist || 'Yani') === 'Ambas' ? (
+                            {normalizeDentist(appt.dentist) === 'Ambas' ? (
                               <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[10px] sm:text-[11px] font-bold notranslate whitespace-nowrap" translate="no">
                                 Marie y Yani
                               </span>
-                            ) : (appt.dentist || 'Yani') === 'Yani' ? (
+                            ) : normalizeDentist(appt.dentist) === 'Yani' ? (
                               <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] sm:text-[11px] font-bold notranslate whitespace-nowrap" translate="no">
                                 Dra. Yani
                               </span>
@@ -1415,7 +1407,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
                 return dayAppts.map((appt) => {
                   const contact = getContact(appt.contactId);
-                  const dentistName = appt.dentist || 'Yani';
+                  const dentistName = normalizeDentist(appt.dentist);
                   const isAmbas = dentistName === 'Ambas';
                   const isYani = dentistName === 'Yani';
                   const timeRange = getAppointmentTimeRange(appt.time, appt.durationMinutes);
@@ -1655,9 +1647,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       <div className="p-2.5 bg-emerald-50/80 rounded-xl border border-emerald-200">
                         <span className="text-[10px] text-[#2E7D5E] font-bold uppercase">Odontóloga</span>
                         <p className="text-xs font-extrabold text-slate-900">
-                          {(selectedApptDetail.dentist || 'Yani') === 'Ambas' 
+                          {normalizeDentist(selectedApptDetail.dentist) === 'Ambas' 
                             ? 'Las dos juntas (Marie y Yani)' 
-                            : (selectedApptDetail.dentist || 'Yani') === 'Yani' 
+                            : normalizeDentist(selectedApptDetail.dentist) === 'Yani' 
                             ? 'Dra. Yani' 
                             : 'Dra. Marie'}
                         </p>
@@ -1744,15 +1736,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               return;
                             }
 
-                            const dentistName = (selectedApptDetail.dentist || 'Yani') === 'Ambas'
+                            const dentistKey = normalizeDentist(selectedApptDetail.dentist);
+                            const dentistName = dentistKey === 'Ambas'
                               ? 'las Dras. Marie y Yani'
-                              : `la Dra. ${selectedApptDetail.dentist || 'Yani'}`;
+                              : `la Dra. ${dentistKey}`;
 
                             const baseUrl = window.location.origin;
                             const patientParam = encodeURIComponent(contact.fullName || 'Paciente');
                             const dateParam = encodeURIComponent(selectedApptDetail.date || '');
                             const horaParam = encodeURIComponent(selectedApptDetail.time || '');
-                            const dentistParam = encodeURIComponent(selectedApptDetail.dentist || 'Marie');
+                            const dentistParam = encodeURIComponent(dentistKey);
 
                             const confirmUrl = `${baseUrl}/?confirm_id=${selectedApptDetail.id}&action=confirm&paciente=${patientParam}&fecha=${dateParam}&hora=${horaParam}&dentista=${dentistParam}`;
                             const cancelUrl = `${baseUrl}/?confirm_id=${selectedApptDetail.id}&action=cancel&paciente=${patientParam}&fecha=${dateParam}&hora=${horaParam}&dentista=${dentistParam}`;
