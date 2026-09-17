@@ -4,6 +4,22 @@ Agenda web para un consultorio con dos odontólogas: pacientes, turnos, ficha cl
 
 **Demo:** [https://agendaodontologica-cuvt.onrender.com](https://agendaodontologica-cuvt.onrender.com)
 
+## Deploy automático (Render)
+
+Ya no hace falta entrar a Render y apretar **Manual Deploy → Deploy latest commit**.
+
+Cada vez que `main` se actualiza, GitHub Actions dispara el mismo deploy.
+
+**Una sola vez** (después no se toca más):
+
+1. En Render: el servicio `agendaodontologica` → **Settings** → **Deploy Hook** → copiar la URL.
+2. En GitHub: **Settings → Secrets and variables → Actions** → New secret:
+   - Name: `RENDER_DEPLOY_HOOK`
+   - Value: la URL del hook
+3. Opcional en Render: **Settings → Auto-Deploy = Yes** (deploy nativo al pushear a `main`).
+
+El workflow está en `.github/workflows/deploy-render.yml`. También se puede disparar a mano desde la pestaña **Actions → Deploy Render → Run workflow**.
+
 Versión de trabajo: `Escritorio/Proyectos Personales/Agenda/mi-agenda(8)`
 
 ## Stack

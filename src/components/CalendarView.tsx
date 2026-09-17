@@ -360,7 +360,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
     // Sort time inside each day
     Object.keys(map).forEach((dateKey) => {
-      map[dateKey].sort((a, b) => a.time.localeCompare(b.time));
+      map[dateKey].sort((a, b) => {
+        const ta = getAppointmentTimeRange(a.time, a.durationMinutes).start || a.time;
+        const tb = getAppointmentTimeRange(b.time, b.durationMinutes).start || b.time;
+        const byTime = ta.localeCompare(tb);
+        if (byTime !== 0) return byTime;
+        return a.id.localeCompare(b.id);
+      });
     });
 
     return map;
@@ -822,7 +828,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       setHighlightedDay(dayStr);
                       setSelectedDayModalDate(dayStr);
                     }}
-                    className={`scroll-mt-36 sm:scroll-mt-44 min-h-[52px] sm:min-h-[85px] lg:min-h-[96px] p-1 sm:p-1.5 bg-white hover:bg-emerald-50/30 transition-all relative flex flex-col group cursor-pointer ${
+                    className={`scroll-mt-36 sm:scroll-mt-44 min-h-[52px] sm:min-h-[85px] lg:min-h-[96px] p-1 sm:p-1.5 bg-white hover:bg-emerald-50/30 transition-colors relative flex flex-col group cursor-pointer ${
                       isHighlighted
                         ? 'ring-3 ring-amber-400 bg-amber-50/70 z-10 shadow-md'
                         : isToday
@@ -940,7 +946,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               setSelectedApptDetail(appt);
                             }}
                             title={`${timeRange.rangeShort} • ${contact?.fullName || 'Paciente'}${appt.motive ? ` (${appt.motive})` : ''} • Dra. ${dentistName}`}
-                            className={`px-1.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg border text-[10px] sm:text-[11px] leading-tight flex items-center justify-between gap-1 cursor-pointer transition-all hover:scale-[1.01] shadow-2xs ${
+                            className={`px-1.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg border text-[10px] sm:text-[11px] leading-tight flex items-center justify-between gap-1 cursor-pointer transition-colors shadow-2xs ${
                               appt.completed
                                 ? 'bg-slate-100 border-slate-300 text-slate-500 opacity-75'
                                 : isAmbas

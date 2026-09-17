@@ -1,0 +1,24 @@
+name: Deploy Render
+
+# Equivale a apretar "Deploy latest commit" en el dashboard de Render.
+# Se dispara solo cuando hay un push (o merge) a main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Trigger Render
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy latest commit
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "::warning::Falta el secret RENDER_DEPLOY_HOOK. Configuralo una vez (Render → Service → Settings → Deploy Hook) para que el deploy sea automático."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+          echo "Deploy disparado en Render (último commit de main)."
