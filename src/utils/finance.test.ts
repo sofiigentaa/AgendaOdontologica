@@ -4,6 +4,7 @@ import {
   calculateDailyTotals,
   calculateTurnStats,
   filterAppointmentsByFinanceMode,
+  buildDentistPayoutBreakdown,
 } from './finance';
 
 function appt(overrides: Partial<Appointment>): Appointment {
@@ -116,6 +117,21 @@ describe('calculateDailyTotals', () => {
     expect(totals.totMarie).toBe(0);
     expect(totals.totYani).toBeCloseTo(7225.91, 2);
     expect(totals.totNeto).toBe(0);
+  });
+});
+
+describe('buildDentistPayoutBreakdown', () => {
+  it('explains Yani total from each attended patient', () => {
+    const list = [
+      appt({ id: 'h1', contactId: 'c1', dentist: 'Yani', ingresos: 3323.99, descartables: 6000, time: '13:00' }),
+      appt({ id: 'h2', contactId: 'c2', dentist: 'Yani', ingresos: 6883.97, descartables: 7000, time: '16:00' }),
+    ];
+    const names: Record<string, string> = { c1: 'Hernán Díaz', c2: 'Lucía López' };
+    const breakdown = buildDentistPayoutBreakdown(list, 'Yani', (id) => names[id] || 'Paciente');
+    expect(breakdown.lines).toHaveLength(2);
+    expect(breakdown.lines[0].patientName).toBe('Hernán Díaz');
+    expect(breakdown.lines[0].honorarioBaseKind).toBe('cobrado');
+    expect(breakdown.total).toBeCloseTo(breakdown.lines[0].share + breakdown.lines[1].share, 2);
   });
 });
 

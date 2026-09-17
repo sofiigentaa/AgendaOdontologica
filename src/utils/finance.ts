@@ -2,6 +2,8 @@ import { Appointment } from '../types';
 
 export type FinanceFilterMode = 'all' | 'attendedOnly' | 'pendingOnly';
 
+export type HonorarioBaseKind = 'ganancia' | 'cobrado';
+
 export interface TurnFinanceStats {
   ingresos: number;
   descartables: number;
@@ -11,6 +13,8 @@ export interface TurnFinanceStats {
   totalEgresos: number;
   balanceNeto: number;
   pctPercent: number;
+  honorarioBase: number;
+  honorarioBaseKind: HonorarioBaseKind;
   honorarioTotal: number;
   correspondyYani: number;
   correspondyMarie: number;
@@ -42,6 +46,8 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
       totalEgresos: 0,
       balanceNeto: 0,
       pctPercent: 50,
+      honorarioBase: 0,
+      honorarioBaseKind: 'ganancia',
       honorarioTotal: 0,
       correspondyYani: 0,
       correspondyMarie: 0,
@@ -68,6 +74,7 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
   // Si los gastos comieron el neto, igual se liquida % de lo cobrado: si no,
   // Marie y Yani quedan ambas en $0 aunque haya pacientes atendidos.
   const honorarioBase = balanceNeto > 0 ? balanceNeto : ingresos;
+  const honorarioBaseKind: HonorarioBaseKind = balanceNeto > 0 ? 'ganancia' : 'cobrado';
   const honorarioTotal = honorarioBase * (pctPercent / 100);
 
   let correspondyYani = 0;
@@ -92,6 +99,8 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
     totalEgresos,
     balanceNeto,
     pctPercent,
+    honorarioBase,
+    honorarioBaseKind,
     honorarioTotal,
     correspondyYani,
     correspondyMarie,
@@ -147,4 +156,48 @@ export function calculateDailyTotals(dayAppointments: Appointment[]) {
     totMarie,
     totNeto: Math.max(0, totIngresos - totEgresos),
   };
+}
+
+export interface DentistPayoutLine {
+  appointmentId: string;
+  patientName: string;
+  time: string;
+  dentist: 'Yani' | 'Marie' | 'Ambas';
+  ingresos: number;
+  egresos: number;
+  pctPercent: number;
+  honorarioBase: number;
+  honorarioBaseKind: HonorarioBaseKind;
+  share: number;
+}
+
+export function buildDentistPayoutBreakdown(
+  dayAppointments: Appointment[],
+  dentist: 'Yani' | 'Marie',
+  patientNameFor: (contactId: string) => string
+): { lines: DentistPayoutLine[]; total: number } {
+  const lines: DentistPayoutLine[] = [];
+  let total = 0;
+
+  (dayAppointments || []).forEach((appt) => {
+    if (!isApptAttended(appt)) return;
+    const s = calculateTurnStats(appt);
+    const share = dentist === 'Yani' ? s.correspondyYani : s.correspondyMarie;
+    if (!(share > 0)) return;
+    total += share;
+    lines.push({
+      appointmentId: appt.id,
+      patientName: patientNameFor(appt.contactId) || 'Paciente',
+      time: appt.time,
+      dentist: s.dentist as 'Yani' | 'Marie' | 'Ambas',
+      ingresos: s.ingresos,
+      egresos: s.totalEgresos,
+      pctPercent: s.pctPercent,
+      honorarioBase: s.honorarioBase,
+      honorarioBaseKind: s.honorarioBaseKind,
+      share,
+    });
+  });
+
+  return { lines, total };
 }
