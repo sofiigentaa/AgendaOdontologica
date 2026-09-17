@@ -3,8 +3,10 @@ import { Appointment } from '../types';
 import {
   calculateDailyTotals,
   calculateTurnStats,
+  clampTurnExpenseLines,
   filterAppointmentsByFinanceMode,
   buildDentistPayoutBreakdown,
+  sanitizeAppointmentWrite,
 } from './finance';
 
 function appt(overrides: Partial<Appointment>): Appointment {
@@ -42,17 +44,20 @@ describe('calculateTurnStats', () => {
     expect(stats.correspondyYani).toBe(2250);
   });
 
-  it('never lets net balance go negative', () => {
+  it('never lets expenses exceed what was collected', () => {
     const stats = calculateTurnStats(
       appt({ ingresos: 100, descartables: 400, estampillas: 0, materiales: 0, mecanicoDental: 0 })
     );
+    expect(stats.totalEgresos).toBe(100);
+    expect(stats.descartables).toBe(100);
+    expect(stats.expensesWereClamped).toBe(true);
     expect(stats.balanceNeto).toBe(0);
     expect(stats.honorarioTotal).toBe(0);
     expect(stats.correspondyMarie).toBe(0);
     expect(stats.correspondyYani).toBe(0);
   });
 
-  it('pays Yani nothing when her turn spent more than it collected', () => {
+  it('caps daily-looking overspend so ingresos stay >= egresos', () => {
     const stats = calculateTurnStats(
       appt({
         dentist: 'Yani',
@@ -64,6 +69,8 @@ describe('calculateTurnStats', () => {
         porcentajeHonorario: 50,
       })
     );
+    expect(stats.totalEgresos).toBe(14451.82);
+    expect(stats.totalEgresos).toBeLessThanOrEqual(stats.ingresos);
     expect(stats.balanceNeto).toBe(0);
     expect(stats.correspondyYani).toBe(0);
     expect(stats.correspondyMarie).toBe(0);
@@ -115,6 +122,8 @@ describe('calculateDailyTotals', () => {
     ]);
     expect(totals.totMarie).toBe(0);
     expect(totals.totYani).toBe(0);
+    expect(totals.totEgresos).toBe(totals.totIngresos);
+    expect(totals.totEgresos).toBeLessThanOrEqual(totals.totIngresos);
     expect(totals.totNeto).toBe(0);
   });
 });
@@ -129,8 +138,36 @@ describe('buildDentistPayoutBreakdown', () => {
     const breakdown = buildDentistPayoutBreakdown(list, 'Yani', (id) => names[id] || 'Paciente');
     expect(breakdown.lines.map((l) => l.patientName)).toEqual(['Hernán Díaz', 'Lucía López']);
     expect(breakdown.lines[0].share).toBe(4000);
+    expect(breakdown.lines[1].egresos).toBe(3000);
     expect(breakdown.lines[1].share).toBe(0);
     expect(breakdown.total).toBe(4000);
+  });
+});
+
+describe('clampTurnExpenseLines', () => {
+  it('scales each expense line so the total matches cobrado', () => {
+    const clamped = clampTurnExpenseLines(100, {
+      descartables: 60,
+      estampillas: 20,
+      materiales: 20,
+      mecanico: 100,
+    });
+    expect(clamped.wasClamped).toBe(true);
+    expect(clamped.totalEgresos).toBe(100);
+    expect(clamped.descartables + clamped.estampillas + clamped.materiales + clamped.mecanico).toBeCloseTo(100);
+  });
+});
+
+describe('sanitizeAppointmentWrite', () => {
+  it('persists Marie / Las dos and clamps gastos', () => {
+    const marie = sanitizeAppointmentWrite(
+      appt({ dentist: 'dra. marie', ingresos: 200, descartables: 500, estampillas: 0, materiales: 0, mecanicoDental: 0 })
+    );
+    expect(marie.dentist).toBe('Marie');
+    expect(marie.descartables).toBe(200);
+
+    const ambas = sanitizeAppointmentWrite(appt({ dentist: 'las dos juntas', ingresos: 1000 }));
+    expect(ambas.dentist).toBe('Ambas');
   });
 });
 

@@ -22,7 +22,10 @@ import {
   filterAppointmentsByFinanceMode,
   isApptAttended,
   buildDentistPayoutBreakdown,
+  expensesExceedIncome,
+  sumExpenseLines,
 } from '../utils/finance';
+import { normalizeDentist } from '../utils/dentist';
 
 interface FinanceSummaryModalProps {
   isOpen: boolean;
@@ -135,10 +138,20 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
     setEditMateriales(appt.materiales || 0);
     setEditMecanico(appt.mecanicoDental || 0);
     setEditPorcentaje(appt.porcentajeHonorario ?? 50);
-    setEditDentist((appt.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Yani');
+    setEditDentist(normalizeDentist(appt.dentist));
   };
 
   const handleSaveFinances = (apptId: string) => {
+    const lines = {
+      descartables: editDescartables,
+      estampillas: editEstampillas,
+      materiales: editMateriales,
+      mecanico: editMecanico,
+    };
+    if (expensesExceedIncome(editIngresos, lines)) {
+      alert('Los gastos no pueden ser mayores que lo cobrado. Bajá los egresos o aumentá el ingreso.');
+      return;
+    }
     onEditAppointmentFinances(apptId, {
       ingresos: editIngresos,
       descartables: editDescartables,
@@ -146,7 +159,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
       materiales: editMateriales,
       mecanicoDental: editMecanico,
       porcentajeHonorario: editPorcentaje,
-      dentist: editDentist,
+      dentist: normalizeDentist(editDentist),
     });
     setEditingApptId(null);
   };
@@ -754,9 +767,24 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-2 border-t border-emerald-200">
-                              <span className="text-xs text-emerald-900 font-bold">
-                                Subtotal Egresos: {formatMoney((editDescartables || 0) + (editEstampillas || 0) + (editMateriales || 0) + (editMecanico || 0))}
+                            <div className="flex flex-col gap-1 pt-2 border-t border-emerald-200">
+                              <div className="flex items-center justify-between">
+                              <span className={`text-xs font-bold ${
+                                expensesExceedIncome(editIngresos, {
+                                  descartables: editDescartables,
+                                  estampillas: editEstampillas,
+                                  materiales: editMateriales,
+                                  mecanico: editMecanico,
+                                })
+                                  ? 'text-rose-700'
+                                  : 'text-emerald-900'
+                              }`}>
+                                Subtotal Egresos: {formatMoney(sumExpenseLines({
+                                  descartables: editDescartables,
+                                  estampillas: editEstampillas,
+                                  materiales: editMateriales,
+                                  mecanico: editMecanico,
+                                }))}
                               </span>
                               <div className="flex items-center gap-2">
                                 <button
@@ -774,6 +802,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                                   Guardar Montos
                                 </button>
                               </div>
+                              </div>
                             </div>
                           </div>
                         ) : (
@@ -787,6 +816,9 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                             <div className="p-1.5 sm:p-2 bg-rose-50 rounded-lg border border-rose-100">
                               <span className="text-[10px] text-slate-500 font-semibold block">Egresos:</span>
                               <span className="font-extrabold text-rose-800">{formatMoney(stats.totalEgresos)}</span>
+                              {stats.expensesWereClamped && (
+                                <span className="block text-[9px] font-bold text-rose-600 mt-0.5">Ajustado al cobrado</span>
+                              )}
                             </div>
 
                             <div className="p-1.5 sm:p-2 bg-slate-100 rounded-lg border border-slate-200">

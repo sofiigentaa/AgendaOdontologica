@@ -44,6 +44,7 @@ import { ScheduleAppointmentModal } from './components/ScheduleAppointmentModal'
 import { QuickNoteModal } from './components/QuickNoteModal';
 import { exportNextDayAppointmentsPlainFile, exportContactsPlainFile } from './utils/exportHelpers';
 import { parseImportFileContent } from './utils/fileImporter';
+import { sanitizeAppointmentWrite } from './utils/finance';
 import { ShareContactModal } from './components/ShareContactModal';
 import { InsuranceFolderModal } from './components/InsuranceFolderModal';
 import { FinanceSummaryModal } from './components/FinanceSummaryModal';
@@ -716,7 +717,7 @@ export default function App() {
     let updatedAppt: Appointment | null = null;
     const updated = appointments.map((a) => {
       if (a.id === appointmentId) {
-        updatedAppt = { ...a, ...financialData };
+        updatedAppt = sanitizeAppointmentWrite({ ...a, ...financialData });
         return updatedAppt;
       }
       return a;
@@ -749,18 +750,23 @@ export default function App() {
     const targetId = data.appointmentId || appointmentId;
     if (targetId) {
       const existing = appointments.find((a) => a.id === targetId);
-      const updatedAppt = { ...existing, ...data, id: targetId } as Appointment;
+      const updatedAppt = sanitizeAppointmentWrite({
+        ...existing,
+        ...data,
+        id: targetId,
+        dentist: data.dentist || existing?.dentist || 'Marie',
+      } as Appointment);
       const updated = appointments.map((a) => (a.id === targetId ? updatedAppt : a));
       updateAppointments(updated);
       upsertAppointment(updatedAppt);
       showToast('Turno actualizado en el calendario');
     } else {
-      const newAppt: Appointment = {
+      const newAppt = sanitizeAppointmentWrite({
         id: `appt-${Date.now()}`,
-        dentist: (data.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Marie',
         ...data,
+        dentist: data.dentist || 'Marie',
         createdAt: new Date().toISOString(),
-      };
+      } as Appointment);
       updateAppointments([newAppt, ...appointments]);
       upsertAppointment(newAppt);
       showToast('Nuevo turno agendado en el calendario');
@@ -878,17 +884,17 @@ export default function App() {
     }
 
     if (payload.appointment && payload.appointment.date && contactId) {
-      const newAppt: Appointment = {
+      const newAppt = sanitizeAppointmentWrite({
         id: `appt-${Date.now()}`,
         contactId,
         date: payload.appointment.date,
         time: payload.appointment.time || '10:00',
         durationMinutes: 30,
         motive: payload.appointment.motive || payload.patient.notes || 'Consulta odontológica',
-        dentist: (payload.appointment as any).dentist || 'Yani',
+        dentist: (payload.appointment as any).dentist || 'Marie',
         completed: false,
         createdAt: new Date().toISOString(),
-      };
+      } as Appointment);
 
       updateAppointments([newAppt, ...appointments]);
       upsertAppointment(newAppt);

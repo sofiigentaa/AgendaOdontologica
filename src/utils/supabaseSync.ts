@@ -1,6 +1,8 @@
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { Contact, Appointment, CallReminder, ContactNote, ContactAttachment, InsuranceFolderFile } from '../types';
 import { INITIAL_CONTACTS, INITIAL_APPOINTMENTS } from '../data/sampleContacts';
+import { sanitizeAppointmentWrite } from './finance';
+import { normalizeDentist } from './dentist';
 
 const initialContactsMap = new Map<string, Contact>();
 INITIAL_CONTACTS.forEach((c) => initialContactsMap.set(c.id, c));
@@ -62,50 +64,54 @@ export async function syncToSupabase(data: {
 
     if (data.appointments && data.appointments.length > 0) {
       const payload = data.appointments.map((a) => {
+        const clean = sanitizeAppointmentWrite(a);
         return {
-          id: a.id,
-          contact_id: a.contactId,
-          contact_name: a.motive || '',
-          title: a.dentist || 'Marie',
-          dentist: a.dentist || 'Marie',
-          date: a.date,
-          time: a.time,
-          duration: a.durationMinutes || 30,
-          duration_minutes: a.durationMinutes || 30,
-          treatment: a.motive || '',
-          motive: a.motive || '',
-          notes: JSON.stringify(a),
-          status: a.completed ? 'completed' : a.whatsappStatus === 'cancelled' ? 'cancelled' : 'scheduled',
-          completed: Boolean(a.completed),
-          color: a.whatsappStatus === 'confirmed' ? '#10b981' : a.whatsappStatus === 'cancelled' ? '#ef4444' : '#3b82f6',
-          whatsapp_status: a.whatsappStatus || null,
-          whatsapp_last_reply: a.whatsappLastReply || null,
-          ingresos: a.ingresos || 0,
-          descartables: a.descartables || 0,
-          estampillas: a.estampillas || 0,
-          materiales: a.materiales || 0,
-          mecanico_dental: a.mecanicoDental || 0,
-          porcentaje_honorario: a.porcentajeHonorario || 50,
-          created_at: a.createdAt || new Date().toISOString(),
+          id: clean.id,
+          contact_id: clean.contactId,
+          contact_name: clean.motive || '',
+          title: clean.dentist || 'Marie',
+          dentist: clean.dentist || 'Marie',
+          date: clean.date,
+          time: clean.time,
+          duration: clean.durationMinutes || 30,
+          duration_minutes: clean.durationMinutes || 30,
+          treatment: clean.motive || '',
+          motive: clean.motive || '',
+          notes: JSON.stringify(clean),
+          status: clean.completed ? 'completed' : clean.whatsappStatus === 'cancelled' ? 'cancelled' : 'scheduled',
+          completed: Boolean(clean.completed),
+          color: clean.whatsappStatus === 'confirmed' ? '#10b981' : clean.whatsappStatus === 'cancelled' ? '#ef4444' : '#3b82f6',
+          whatsapp_status: clean.whatsappStatus || null,
+          whatsapp_last_reply: clean.whatsappLastReply || null,
+          ingresos: clean.ingresos || 0,
+          descartables: clean.descartables || 0,
+          estampillas: clean.estampillas || 0,
+          materiales: clean.materiales || 0,
+          mecanico_dental: clean.mecanicoDental || 0,
+          porcentaje_honorario: clean.porcentajeHonorario || 50,
+          created_at: clean.createdAt || new Date().toISOString(),
         };
       });
 
       const res = await supabase.from('appointments').upsert(payload, { onConflict: 'id' });
       if (res.error) {
-        const minimal = data.appointments.map((a) => ({
-          id: a.id,
-          contact_id: a.contactId,
-          contact_name: a.motive || '',
-          title: a.dentist || 'Marie',
-          date: a.date,
-          time: a.time,
-          duration: a.durationMinutes || 30,
-          treatment: a.motive || '',
-          notes: JSON.stringify(a),
-          status: a.completed ? 'completed' : a.whatsappStatus === 'cancelled' ? 'cancelled' : a.whatsappStatus === 'confirmed' ? 'confirmed' : 'scheduled',
-          color: a.whatsappStatus === 'confirmed' ? '#10b981' : a.whatsappStatus === 'cancelled' ? '#ef4444' : '#3b82f6',
-          created_at: a.createdAt || new Date().toISOString(),
-        }));
+        const minimal = data.appointments.map((a) => {
+          const clean = sanitizeAppointmentWrite(a);
+          return {
+            id: clean.id,
+            contact_id: clean.contactId,
+            contact_name: clean.motive || '',
+            title: clean.dentist || 'Marie',
+            date: clean.date,
+            time: clean.time,
+            duration: clean.durationMinutes || 30,
+            treatment: clean.motive || '',
+            notes: JSON.stringify(clean),
+            status: clean.completed ? 'completed' : clean.whatsappStatus === 'cancelled' ? 'cancelled' : clean.whatsappStatus === 'confirmed' ? 'confirmed' : 'scheduled',
+            color: clean.whatsappStatus === 'confirmed' ? '#10b981' : clean.whatsappStatus === 'cancelled' ? '#ef4444' : '#3b82f6',
+            created_at: clean.createdAt || new Date().toISOString(),
+          };
+        });
         await supabase.from('appointments').upsert(minimal, { onConflict: 'id' });
       }
     }
@@ -365,12 +371,14 @@ export async function fetchFromSupabase(): Promise<{
         const date = row.date || rawObj.date || '';
         const time = row.time || rawObj.time || '';
         const motive = row.motive || row.treatment || rawObj.motive || row.contact_name || row.title || 'Consulta';
-        const dentist = row.dentist || rawObj.dentist || (row.title === 'Marie' || row.title === 'Yani' || row.title === 'Ambas' ? row.title : 'Marie');
+        const dentist = normalizeDentist(
+          row.dentist || rawObj.dentist || (row.title === 'Marie' || row.title === 'Yani' || row.title === 'Ambas' ? row.title : 'Marie')
+        );
         const duration = Number(row.durationMinutes || row.duration_minutes || row.duration || rawObj.durationMinutes || 30);
         const completed = Boolean(row.completed === true || row.status === 'completed' || rawObj.completed === true);
         const whatsappLastReply = row.whatsapp_last_reply || row.whatsappLastReply || rawObj.whatsappLastReply || null;
 
-        activeRows.push({
+        activeRows.push(sanitizeAppointmentWrite({
           id: row.id,
           contactId: contactId,
           date: date,
@@ -388,7 +396,7 @@ export async function fetchFromSupabase(): Promise<{
           materiales: Number(row.materiales ?? rawObj.materiales ?? 0),
           mecanicoDental: Number(row.mecanicoDental ?? row.mecanico_dental ?? rawObj.mecanicoDental ?? 0),
           porcentajeHonorario: Number(row.porcentajeHonorario ?? row.porcentaje_honorario ?? rawObj.porcentajeHonorario ?? 50),
-        });
+        }));
       }
 
       result.appointments = activeRows;
