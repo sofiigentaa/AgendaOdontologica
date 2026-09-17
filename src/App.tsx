@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   getStoredContacts, 
   saveStoredContacts, 
@@ -107,6 +107,22 @@ export default function App() {
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [attachments, setAttachments] = useState<ContactAttachment[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const completedLocksRef = useRef(new Map<string, { value: boolean; until: number }>());
+
+  const lockAppointmentCompleted = (id: string, value: boolean) => {
+    completedLocksRef.current.set(id, { value, until: Date.now() + 60_000 });
+  };
+
+  const resolveCompleted = (id: string, incoming: boolean | undefined | null, current?: boolean) => {
+    const lock = completedLocksRef.current.get(id);
+    if (lock) {
+      if (Date.now() < lock.until) return lock.value;
+      completedLocksRef.current.delete(id);
+    }
+    if (incoming === undefined || incoming === null) return Boolean(current);
+    if (Boolean(current) && !incoming) return true;
+    return Boolean(incoming);
+  };
   const [insuranceFiles, setInsuranceFiles] = useState<InsuranceFolderFile[]>([]);
 
   // Google Workspace state
@@ -184,11 +200,7 @@ export default function App() {
       const curr = currentMap.get(inc.id);
       if (!curr) return inc;
 
-      const incomingCompleted = inc.completed;
-      const completed =
-        incomingCompleted === undefined || incomingCompleted === null
-          ? curr.completed
-          : Boolean(incomingCompleted);
+      const completed = resolveCompleted(inc.id, inc.completed, curr.completed);
 
       if (curr.whatsappStatus && curr.whatsappStatus !== 'pending' && (!inc.whatsappStatus || inc.whatsappStatus === 'pending')) {
         return {
@@ -783,16 +795,14 @@ export default function App() {
   };
 
   const handleToggleAppointmentComplete = (appointmentId: string) => {
-    setAppointments((prev) => {
-      const updated = prev.map((a) =>
-        a.id === appointmentId ? { ...a, completed: !a.completed } : a
-      );
-      const toggled = updated.find((a) => a.id === appointmentId);
-      saveStoredAppointments(updated);
-      if (toggled) upsertAppointment(toggled);
-      return updated;
-    });
-    showToast('Estado del turno actualizado');
+    const current = appointments.find((a) => a.id === appointmentId);
+    if (!current) return;
+    const nextCompleted = !Boolean(current.completed);
+    lockAppointmentCompleted(appointmentId, nextCompleted);
+    const toggled = { ...current, completed: nextCompleted };
+    updateAppointments(appointments.map((a) => (a.id === appointmentId ? toggled : a)));
+    upsertAppointment(toggled);
+    showToast(nextCompleted ? '¡Turno marcado como atendido!' : 'Turno marcado como pendiente');
   };
 
   const handleDeleteAppointment = (appointmentId: string) => {

@@ -565,9 +565,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                                 type="button"
                                 onClick={() => {
                                   onToggleAppointmentComplete(appt.id);
-                                  if (onShowToast) {
-                                    onShowToast(attended ? 'Turno marcado como pendiente' : '¡Turno marcado como atendido!');
-                                  }
                                 }}
                                 className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer border ${
                                   attended
