@@ -7,6 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import { db, schema, isDbConfigured } from './src/db/index.ts';
 import { eq, sql } from 'drizzle-orm';
 import { sanitizeAppointmentWrite } from './src/utils/finance.ts';
+import { normalizeDentist } from './src/utils/dentist.ts';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -168,6 +169,46 @@ function patchSupabaseAppointment(id: string, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   }).catch(() => {});
+}
+
+function upsertSupabaseAppointmentRow(row: Record<string, unknown>) {
+  const sb = supabaseEnv();
+  if (!sb) return;
+  fetch(`${sb.url}/rest/v1/appointments`, {
+    method: 'POST',
+    headers: {
+      apikey: sb.key,
+      Authorization: `Bearer ${sb.key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify(row),
+  }).catch(() => {});
+}
+
+function appointmentToSupabaseRow(a: any) {
+  return {
+    id: a.id,
+    contact_id: a.contactId,
+    title: a.dentist || 'Marie',
+    dentist: a.dentist || 'Marie',
+    date: a.date,
+    time: a.time,
+    duration: a.durationMinutes || 30,
+    duration_minutes: a.durationMinutes || 30,
+    motive: a.motive || '',
+    treatment: a.motive || '',
+    notes: JSON.stringify(a),
+    status: a.completed ? 'completed' : a.whatsappStatus === 'cancelled' ? 'cancelled' : 'scheduled',
+    completed: Boolean(a.completed),
+    ingresos: a.ingresos || 0,
+    descartables: a.descartables || 0,
+    estampillas: a.estampillas || 0,
+    materiales: a.materiales || 0,
+    mecanico_dental: a.mecanicoDental || 0,
+    porcentaje_honorario: a.porcentajeHonorario ?? 50,
+    created_at: a.createdAt || new Date().toISOString(),
+  };
 }
 
 app.get('/api/health', (_req, res) => {
@@ -386,6 +427,123 @@ async function initStoreFromDatabase() {
       console.warn('Initial load from Cloud SQL:', err?.message);
     }
   }
+}
+
+async function writeAppointmentRow(clean: any) {
+  if (!clean?.id || !clean.contactId) return;
+  if (isDbConfigured) {
+    await db.insert(schema.appointments).values({
+      id: clean.id,
+      contactId: clean.contactId,
+      date: clean.date,
+      time: clean.time,
+      durationMinutes: clean.durationMinutes ?? 30,
+      motive: clean.motive ?? null,
+      dentist: clean.dentist ?? 'Marie',
+      completed: clean.completed ?? false,
+      whatsappStatus: clean.whatsappStatus ?? null,
+      whatsappLastReply: clean.whatsappLastReply ?? null,
+      createdAt: clean.createdAt || new Date().toISOString(),
+      ingresos: clean.ingresos ?? 0,
+      descartables: clean.descartables ?? 0,
+      estampillas: clean.estampillas ?? 0,
+      materiales: clean.materiales ?? 0,
+      mecanicoDental: clean.mecanicoDental ?? 0,
+      porcentajeHonorario: clean.porcentajeHonorario ?? 50,
+    }).onConflictDoUpdate({
+      target: schema.appointments.id,
+      set: {
+        contactId: clean.contactId,
+        date: clean.date,
+        time: clean.time,
+        durationMinutes: clean.durationMinutes ?? 30,
+        motive: clean.motive ?? null,
+        dentist: clean.dentist ?? 'Marie',
+        completed: clean.completed ?? false,
+        whatsappStatus: clean.whatsappStatus ?? null,
+        whatsappLastReply: clean.whatsappLastReply ?? null,
+        ingresos: clean.ingresos ?? 0,
+        descartables: clean.descartables ?? 0,
+        estampillas: clean.estampillas ?? 0,
+        materiales: clean.materiales ?? 0,
+        mecanicoDental: clean.mecanicoDental ?? 0,
+        porcentajeHonorario: clean.porcentajeHonorario ?? 50,
+      },
+    });
+  }
+  upsertSupabaseAppointmentRow(appointmentToSupabaseRow(clean));
+}
+
+/** Ajusta gastos de turnos ya cargados y crea Marie / Las dos si no hay ninguno. */
+async function repairLoadedAgenda() {
+  const contacts = sharedAgendaStore.contacts || [];
+  let appointments = (sharedAgendaStore.appointments || []).map((a: any) => sanitizeAppointmentWrite(a));
+
+  for (const clean of appointments) {
+    try {
+      await writeAppointmentRow(clean);
+    } catch (err: any) {
+      console.warn('No se pudo reparar turno', clean?.id, err?.message);
+    }
+  }
+
+  const present = new Set(appointments.map((a: any) => normalizeDentist(a.dentist)));
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+  const firstContact = contacts[0];
+  const secondContact = contacts[1] || contacts[0];
+
+  const seeds: any[] = [];
+  if (firstContact?.id && !present.has('Marie')) {
+    seeds.push({
+      id: 'appt-seed-marie',
+      contactId: firstContact.id,
+      date: today,
+      time: '07:00',
+      durationMinutes: 30,
+      motive: 'Consulta Marie',
+      dentist: 'Marie',
+      completed: false,
+      createdAt: new Date().toISOString(),
+      ingresos: 0,
+      descartables: 0,
+      estampillas: 0,
+      materiales: 0,
+      mecanicoDental: 0,
+      porcentajeHonorario: 100,
+    });
+  }
+  if (secondContact?.id && !present.has('Ambas')) {
+    seeds.push({
+      id: 'appt-seed-ambas',
+      contactId: secondContact.id,
+      date: today,
+      time: '07:30',
+      durationMinutes: 30,
+      motive: 'Consulta las dos',
+      dentist: 'Ambas',
+      completed: false,
+      createdAt: new Date().toISOString(),
+      ingresos: 0,
+      descartables: 0,
+      estampillas: 0,
+      materiales: 0,
+      mecanicoDental: 0,
+      porcentajeHonorario: 50,
+    });
+  }
+
+  for (const seed of seeds) {
+    const clean = sanitizeAppointmentWrite(seed);
+    try {
+      await writeAppointmentRow(clean);
+      appointments = [...appointments, clean];
+    } catch (err: any) {
+      console.warn('No se pudo crear turno de prueba', clean?.id, err?.message);
+    }
+  }
+
+  sharedAgendaStore.appointments = appointments;
+  sharedAgendaStore.lastUpdated = new Date().toISOString();
 }
 
 // Background persist to Cloud SQL without blocking HTTP responses
@@ -1464,6 +1622,7 @@ async function startServer() {
   assertProductionSecrets();
   loadFromDiskBackup();
   await initStoreFromDatabase();
+  await repairLoadedAgenda();
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

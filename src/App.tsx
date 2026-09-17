@@ -182,17 +182,18 @@ export default function App() {
 
     return incomingAppts.map((inc) => {
       const curr = currentMap.get(inc.id);
-      if (!curr) return inc;
+      const next = sanitizeAppointmentWrite(inc);
+      if (!curr) return next;
 
       // If current in-memory status is confirmed or cancelled, and incoming has pending/null, preserve the updated status
       if (curr.whatsappStatus && curr.whatsappStatus !== 'pending' && (!inc.whatsappStatus || inc.whatsappStatus === 'pending')) {
         return {
-          ...inc,
+          ...next,
           whatsappStatus: curr.whatsappStatus,
-          whatsappLastReply: curr.whatsappLastReply || inc.whatsappLastReply,
+          whatsappLastReply: curr.whatsappLastReply || next.whatsappLastReply,
         };
       }
-      return inc;
+      return next;
     });
   };
 
@@ -353,7 +354,7 @@ export default function App() {
     const localReminders = getStoredReminders();
     const localNotes = getStoredNotes();
     const localAttachments = getStoredAttachments();
-    const localAppointments = getStoredAppointments();
+    const localAppointments = getStoredAppointments().map((a) => sanitizeAppointmentWrite(a));
     const localInsuranceFiles = getStoredInsuranceFiles();
 
     setContacts(localContacts);
@@ -361,6 +362,9 @@ export default function App() {
     setNotes(localNotes);
     setAttachments(localAttachments);
     setAppointments(localAppointments);
+    if (localAppointments.length > 0) {
+      try { saveStoredAppointments(localAppointments); } catch {}
+    }
     setInsuranceFiles(localInsuranceFiles);
 
     // Sync large files from IndexedDB if available
