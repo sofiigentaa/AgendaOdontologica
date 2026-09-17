@@ -224,6 +224,17 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     scrollToDayHeader(todayFormatted);
   };
 
+  const handleTomorrow = () => {
+    const today = new Date();
+    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    const tomorrowFormatted = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+
+    setCurrentDate(tomorrow);
+    setHighlightedDay(tomorrowFormatted);
+    setTimeout(() => setHighlightedDay(null), 4500);
+    scrollToDayHeader(tomorrowFormatted);
+  };
+
   const handleJumpToSpecificDate = (dateVal: string) => {
     if (!dateVal) return;
     const [yStr, mStr, dStr] = dateVal.split('-');
@@ -471,7 +482,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
 
           <div className="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto">
-            {/* Quick 'Hoy' shortcut button */}
+            {/* Quick 'Hoy' / 'Mañana' shortcut buttons */}
             <button
               type="button"
               data-testid="calendar-today"
@@ -481,6 +492,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             >
               <CalendarIcon className="w-3.5 h-3.5 text-[#2E7D5E]" />
               <span>Hoy</span>
+            </button>
+            <button
+              type="button"
+              data-testid="calendar-tomorrow"
+              onClick={handleTomorrow}
+              title="Ir al día de mañana"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-black bg-white hover:bg-emerald-50 active:bg-emerald-100 text-slate-800 border border-slate-300 hover:border-emerald-300 flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs active:scale-95 transition-all"
+            >
+              <span>Mañana</span>
             </button>
 
             {/* View Mode Toggle (Vista Mes / Lista de Turnos) */}
@@ -759,6 +779,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   <CalendarIcon className="w-3.5 h-3.5 text-[#2E7D5E]" />
                   <span>Ir a Hoy</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={handleTomorrow}
+                  title="Ir al día de mañana"
+                  className="px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white font-black text-xs rounded-lg border border-white/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0 active:scale-95"
+                >
+                  <span>Mañana</span>
+                </button>
               </div>
 
               {/* Right / Bottom on mobile: Date Search / Jump */}
@@ -1021,6 +1049,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               >
                 <CalendarIcon className="w-3.5 h-3.5 text-[#2E7D5E]" />
                 <span>Hoy</span>
+              </button>
+              <button
+                type="button"
+                data-testid="calendar-list-tomorrow"
+                onClick={handleTomorrow}
+                title="Ir al día de mañana"
+                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-[#2E7D5E] font-semibold text-xs rounded-lg border border-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
+              >
+                <span>Mañana</span>
               </button>
               {onDeleteCancelledAppointments && cancelledCount > 0 && (
                 confirmingDeleteCancelled ? (
