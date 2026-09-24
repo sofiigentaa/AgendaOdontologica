@@ -17,7 +17,7 @@ Versión de trabajo: `Escritorio/Proyectos Personales/Agenda/mi-agenda(8)`
 ## Stack
 
 React 19 + Vite + Express + Tailwind.
-El deploy actual en Render **no tiene PostgreSQL conectado** (`/api/db/all` responde `dbAvailable: false`). 
+. 
 
 ## Funcionalidades
 
