@@ -11,7 +11,6 @@ Permitir al equipo del consultorio:
 
 - registrar y consultar pacientes
 - agendar, editar y cancelar turnos
-- ver el día y el mes de trabajo
 - liquidar honorarios de Marie, Yani o ambas
 - guardar copias de seguridad por si no hay internet
 
@@ -20,8 +19,7 @@ Permitir al equipo del consultorio:
 | Actor | Descripción |
 | --- | --- |
 | Odontóloga / secretaría | Usa la agenda (Marie, Yani o quien reciba turnos) |
-| Paciente | Solo confirma o cancela un turno por enlace (si se comparte) |
-| Visitante | No debe ver fichas clínicas (hoy el acceso de demo no es un login real) |
+| Paciente | Solo confirma o cancela un turno por enlace (si se comparte) 
 
 ## 3. Módulos
 
@@ -52,27 +50,6 @@ Permitir al equipo del consultorio:
 - La liquidación diaria suma **solo turnos marcados como atendidos**.
 - Honorario = (ingreso − gastos) × porcentaje. Si es “Ambas”, se parte 50/50.
 
-## 6. Persistencia (estado actual)
 
-| Capa | ¿Activa en el deploy? | Qué implica |
-| --- | --- | --- |
-| localStorage del navegador | Sí | Cada celular/PC ve **su** copia |
-| Archivo en el servidor Render | Parcial | Se pierde si Render reinicia el servicio |
-| PostgreSQL | **No** | No hay `DATABASE_URL` en el deploy |
-| Supabase | Solo si hay claves en el entorno | Hoy no está garantizado |
-
-## 7. Requisitos no funcionales
-
-- Uso en escritorio y celular (barra inferior en mobile).
-- Horarios en formato 24 horas (ej. 14:00).
-- Fechas en formato argentino (DD/MM/AAAA).
-
-## 8. Fuera de alcance (hoy)
-
-- Historia clínica legal / consentimiento informado
-- Facturación AFIP
-- Usuarios con roles y contraseñas individuales seguras
-- Auditoría de quién modificó un turno
-- Copias de seguridad automáticas en la nube confiables
 
 
