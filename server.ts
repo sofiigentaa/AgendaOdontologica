@@ -69,6 +69,38 @@ function allowedConsultorioPassword(): string {
   return isProduction() ? '' : 'admin123';
 }
 
+const AUTH_SETTINGS_ID = 'default';
+
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const candidate = crypto.scryptSync(password, salt, 64).toString('hex');
+  return timingSafeStringEqual(candidate, hash);
+}
+
+async function getStoredPasswordHash(): Promise<string | null> {
+  if (!isDbConfigured) return null;
+  try {
+    const rows = await db.select().from(schema.authSettings).where(eq(schema.authSettings.id, AUTH_SETTINGS_ID)).limit(1);
+    return rows[0]?.passwordHash || null;
+  } catch {
+    return null;
+  }
+}
+
+async function checkConsultorioPassword(password: string): Promise<boolean> {
+  const storedHash = await getStoredPasswordHash();
+  if (storedHash) return verifyPassword(password, storedHash);
+  const expected = allowedConsultorioPassword();
+  return Boolean(expected) && timingSafeStringEqual(password, expected);
+}
+
 function emailAllowed(email: string): boolean {
   const raw = (process.env.CONSULTORIO_EMAIL || '').trim();
   if (!raw) return true;
@@ -173,15 +205,15 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, dbAvailable: isDbConfigured });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const ip = clientIp(req);
   if (tooManyFailedLogins(ip)) {
     return res.status(429).json({ success: false, error: 'Demasiados intentos. Esperá 15 minutos.' });
   }
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '').trim();
-  const expected = allowedConsultorioPassword();
-  if (!email.includes('@') || !expected || !emailAllowed(email) || !timingSafeStringEqual(password, expected)) {
+  const passwordOk = await checkConsultorioPassword(password);
+  if (!email.includes('@') || !emailAllowed(email) || !passwordOk) {
     recordFailedLogin(ip);
     return res.status(401).json({ success: false, error: 'Email o contraseña incorrectos' });
   }
@@ -191,6 +223,35 @@ app.post('/api/auth/login', (req, res) => {
     `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict${isProduction() ? '; Secure' : ''}`
   );
   return res.json({ success: true, email });
+});
+
+app.post('/api/auth/change-password', requireSession, async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '').trim();
+  const newPassword = String(req.body?.newPassword || '').trim();
+
+  if (!isDbConfigured) {
+    return res.status(400).json({ success: false, error: 'No hay base de datos conectada: no se puede guardar una contraseña nueva.' });
+  }
+  if (newPassword.length < 12) {
+    return res.status(400).json({ success: false, error: 'La nueva contraseña debe tener al menos 12 caracteres.' });
+  }
+  const currentOk = await checkConsultorioPassword(currentPassword);
+  if (!currentOk) {
+    return res.status(401).json({ success: false, error: 'La contraseña actual no es correcta.' });
+  }
+
+  const passwordHash = hashPassword(newPassword);
+  const updatedAt = new Date().toISOString();
+  try {
+    await db
+      .insert(schema.authSettings)
+      .values({ id: AUTH_SETTINGS_ID, passwordHash, updatedAt })
+      .onConflictDoUpdate({ target: schema.authSettings.id, set: { passwordHash, updatedAt } });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: publicError('No se pudo guardar la nueva contraseña.', err) });
+  }
+
+  return res.json({ success: true });
 });
 
 app.get('/api/auth/me', (req, res) => {
@@ -332,6 +393,11 @@ async function ensureTablesExist() {
         data_url TEXT NOT NULL,
         notes TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );`,
+      sql`CREATE TABLE IF NOT EXISTS auth_settings (
+        id VARCHAR(255) PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        updated_at VARCHAR(50) NOT NULL
       );`
     ];
 

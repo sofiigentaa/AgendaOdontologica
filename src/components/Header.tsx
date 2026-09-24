@@ -21,10 +21,12 @@ import {
   Trash2,
   Database,
   Lock,
-  Share2
+  Share2,
+  KeyRound
 } from 'lucide-react';
 import { ViewMode, FilterType, MainTab } from '../types';
 import { ShareAppModal } from './ShareAppModal';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface HeaderProps {
   activeTab: MainTab;
@@ -105,6 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [isBackupMenuOpen, setIsBackupMenuOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const backupMenuRef = useRef<HTMLDivElement>(null);
@@ -452,6 +455,23 @@ export const Header: React.FC<HeaderProps> = ({
                       </div>
                     </button>
 
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBackupMenuOpen(false);
+                        setIsChangePasswordOpen(true);
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded-xl text-xs hover:bg-slate-100 text-slate-800 flex items-start gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <div className="p-1.5 bg-slate-100 text-slate-700 rounded-lg shrink-0 mt-0.5">
+                        <KeyRound className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900 text-xs leading-tight">Cambiar Contraseña</p>
+                        <p className="text-[10.5px] text-slate-500 leading-tight">Actualizá la contraseña de acceso al consultorio</p>
+                      </div>
+                    </button>
+
                     {onLogout && (
                       <button
                         type="button"
@@ -658,6 +678,12 @@ export const Header: React.FC<HeaderProps> = ({
       <ShareAppModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
+      />
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
       />
     </header>
   );

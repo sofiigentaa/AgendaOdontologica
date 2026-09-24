@@ -65,6 +65,12 @@ export const contactAttachments = pgTable('contact_attachments', {
   createdAt: text('created_at').notNull(),
 });
 
+export const authSettings = pgTable('auth_settings', {
+  id: text('id').primaryKey(),
+  passwordHash: text('password_hash').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const insuranceFiles = pgTable('insurance_files', {
   id: text('id').primaryKey(),
   insuranceName: text('insurance_name').notNull(),
