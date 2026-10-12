@@ -1747,8 +1747,27 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             const horaParam = encodeURIComponent(selectedApptDetail.time || '');
                             const dentistParam = encodeURIComponent(dentistKey);
 
-                            const confirmUrl = `${baseUrl}/?confirm_id=${selectedApptDetail.id}&action=confirm&paciente=${patientParam}&fecha=${dateParam}&hora=${horaParam}&dentista=${dentistParam}`;
-                            const cancelUrl = `${baseUrl}/?confirm_id=${selectedApptDetail.id}&action=cancel&paciente=${patientParam}&fecha=${dateParam}&hora=${horaParam}&dentista=${dentistParam}`;
+                            // El servidor firma el link (así no se puede adivinar el de otro paciente).
+                            let publicToken = '';
+                            try {
+                              const markRes = await fetch(`/api/appointment/${selectedApptDetail.id}/mark-reminder-sent`, {
+                                method: 'POST',
+                                credentials: 'include',
+                              });
+                              const markData = await markRes.json().catch(() => ({}));
+                              publicToken = markData?.publicToken || '';
+                            } catch {}
+                            if (!publicToken) {
+                              setBotSendFeedback({
+                                id: selectedApptDetail.id,
+                                success: false,
+                                text: 'No se pudo generar el link de confirmación. Revisá la conexión e intentá de nuevo.',
+                              });
+                              return;
+                            }
+                            const tokenParam = encodeURIComponent(publicToken);
+                            const confirmUrl = `${baseUrl}/?confirm_id=${tokenParam}&action=confirm&paciente=${patientParam}&fecha=${dateParam}&hora=${horaParam}&dentista=${dentistParam}`;
+                            const cancelUrl = `${baseUrl}/?confirm_id=${tokenParam}&action=cancel&paciente=${patientParam}&fecha=${dateParam}&hora=${horaParam}&dentista=${dentistParam}`;
 
                             const rawText = `👋 Hola *${contact.fullName || 'Paciente'}*, le recordamos su turno en el *Consultorio Odontológico* con *${dentistName}*:
 
@@ -1787,16 +1806,10 @@ ${cancelUrl}
                             } catch {}
 
                             // Mark as reminder sent on server
-                            try {
-                              await fetch(`/api/appointment/${selectedApptDetail.id}/mark-reminder-sent`, {
-                                method: 'POST',
-                                credentials: 'include',
-                              });
-                              setSelectedApptDetail((prev: any) => ({
-                                ...prev,
-                                whatsappStatus: 'pending',
-                              }));
-                            } catch {}
+                            setSelectedApptDetail((prev: any) => ({
+                              ...prev,
+                              whatsappStatus: 'pending',
+                            }));
 
                             // Open WhatsApp Web or App
                             const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(rawText)}`;

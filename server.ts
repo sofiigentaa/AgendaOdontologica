@@ -1,4 +1,5 @@
 import express from 'express';
+import { checkTimeOverlap, dentistsConflict, isAppointmentBlockingCalendar } from './src/utils/appointmentConflicts.ts';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -56,6 +57,28 @@ function timingSafeStringEqual(a: string, b: string): boolean {
     return false;
   }
   return crypto.timingSafeEqual(ba, bb);
+}
+
+// Links públicos de confirmación: el ID del turno va firmado, así no se puede
+// adivinar el link de otro paciente (antes era appt-<milisegundos>).
+function publicLinkSignature(id: string): string {
+  return crypto.createHmac('sha256', sessionSecret()).update(`appt-link:${id}`).digest('base64url').slice(0, 22);
+}
+
+function publicLinkToken(id: string): string {
+  return `${id}.${publicLinkSignature(id)}`;
+}
+
+// Devuelve el ID del turno si el token es válido; si no, null.
+function resolvePublicToken(token: string): string | null {
+  if (!sessionSecret()) return null;
+  const dot = token.lastIndexOf('.');
+  if (dot <= 0) {
+    // Links viejos sin firma: solo si se habilita a propósito durante la transición.
+    return process.env.ALLOW_LEGACY_PUBLIC_LINKS === 'true' ? token : null;
+  }
+  const id = token.slice(0, dot);
+  return timingSafeStringEqual(token.slice(dot + 1), publicLinkSignature(id)) ? id : null;
 }
 
 function sessionSecret() {
@@ -726,7 +749,7 @@ app.post('/api/sync/agenda', requireSession, (req, res) => {
 
     res.json({ success: true, lastUpdated: sharedAgendaStore.lastUpdated });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message || 'Error updating shared store' });
+    res.status(500).json({ success: false, error: publicError('Error al sincronizar la agenda.', err) });
   }
 });
 
@@ -779,7 +802,7 @@ app.post('/api/sync/insurance-file', requireSession, (req, res) => {
       res.status(400).json({ success: false, error: 'Invalid file data' });
     }
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
+    res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
   }
 });
 
@@ -804,7 +827,7 @@ app.delete('/api/sync/insurance-file/:id', requireSession, (req, res) => {
 
     res.json({ success: true, lastUpdated: sharedAgendaStore.lastUpdated });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
+    res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
   }
 });
 
@@ -822,7 +845,7 @@ app.get('/api/contacts', requireSession, async (req, res) => {
     const rows = await db.select().from(schema.contacts).orderBy(schema.contacts.createdAt);
     res.json({ success: true, contacts: rows });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
+    res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
   }
 });
 
@@ -867,7 +890,7 @@ app.post('/api/contacts', requireSession, async (req, res) => {
     broadcastToSSEClients({ type: 'CONTACT_UPSERT', contact: c, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
+    res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
   }
 });
 
@@ -880,7 +903,7 @@ app.delete('/api/contacts/:id', requireSession, async (req, res) => {
     broadcastToSSEClients({ type: 'CONTACT_DELETE', id, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
+    res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
   }
 });
 
@@ -892,7 +915,7 @@ app.get('/api/appointments', requireSession, async (req, res) => {
     const rows = await db.select().from(schema.appointments).orderBy(schema.appointments.createdAt);
     res.json({ success: true, appointments: rows });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
+    res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
   }
 });
 
@@ -900,6 +923,30 @@ app.post('/api/appointments', requireSession, async (req, res) => {
   try {
     const a = req.body;
     if (!a || !a.id) return res.status(400).json({ success: false, error: 'Falta id' });
+    if (!a.date || !/^\d{4}-\d{2}-\d{2}$/.test(String(a.date)) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(a.time || ''))) {
+      return res.status(400).json({ success: false, error: 'Fecha u hora del turno inválida.' });
+    }
+    // Control de superposición también en el servidor (dos equipos al mismo tiempo).
+    if (!a.completed && a.whatsappStatus !== 'cancelled') {
+      let sameDay: any[] = (sharedAgendaStore.appointments || []).filter((x: any) => x.date === a.date);
+      if (isDbConfigured) {
+        try {
+          sameDay = await db.select().from(schema.appointments).where(eq(schema.appointments.date, a.date));
+        } catch {
+          // si la base no responde, se usa lo que hay en memoria
+        }
+      }
+      const clash = sameDay.find(
+        (x: any) =>
+          x.id !== a.id &&
+          isAppointmentBlockingCalendar(x) &&
+          dentistsConflict(x.dentist, a.dentist) &&
+          checkTimeOverlap(x.time, x.durationMinutes || 30, a.time, a.durationMinutes || 30)
+      );
+      if (clash) {
+        return res.status(409).json({ success: false, error: `Ese horario se superpone con otro turno (${clash.time} hs).` });
+      }
+    }
     if (isDbConfigured) {
       await db.insert(schema.appointments).values({
         id: a.id,
@@ -943,7 +990,7 @@ app.post('/api/appointments', requireSession, async (req, res) => {
     broadcastToSSEClients({ type: 'APPOINTMENT_UPSERT', appointment: a, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
+    res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
   }
 });
 
@@ -956,7 +1003,7 @@ app.delete('/api/appointments/:id', requireSession, async (req, res) => {
     broadcastToSSEClients({ type: 'APPOINTMENT_DELETE', id, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message, cause: err?.cause?.message || null });
+    res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
   }
 });
 
@@ -1065,7 +1112,10 @@ const cancelledAppointmentsCache = new Map<string, any>();
 
 app.get('/api/public/appointment/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = resolvePublicToken(req.params.id);
+    if (!id) {
+      return res.status(404).json({ error: 'Turno no encontrado o ya no está disponible.' });
+    }
     
     // Check if it was recently cancelled
     if (cancelledAppointmentsCache.has(id)) {
@@ -1161,8 +1211,11 @@ app.get('/api/public/appointment/:id', async (req, res) => {
 
 app.post('/api/public/appointment/:id/respond', async (req, res) => {
   try {
-    const { id } = req.params;
-    const { action } = req.body; // 'confirm' | 'cancel'
+    const id = resolvePublicToken(req.params.id);
+    if (!id) {
+      return res.status(404).json({ error: 'Turno no encontrado o ya no está disponible.' });
+    }
+    const { action } = req.body || {}; // 'confirm' | 'cancel'
 
     if (action !== 'confirm' && action !== 'cancel') {
       return res.status(400).json({ error: 'Acción inválida. Debe ser "confirm" o "cancel".' });
@@ -1189,6 +1242,24 @@ app.post('/api/public/appointment/:id/respond', async (req, res) => {
       if (!contact && cached.patientName) {
         contact = { fullName: cached.patientName };
       }
+    }
+
+    // Si no está en memoria, se busca en la base; si no existe, 404
+    // (antes respondía "éxito" aunque el turno no existiera).
+    if (!targetAppt && isDbConfigured) {
+      try {
+        const dbAppts = await db.select().from(schema.appointments).where(eq(schema.appointments.id, id)).limit(1);
+        if (dbAppts.length > 0) {
+          targetAppt = dbAppts[0];
+          const dbContacts = await db.select().from(schema.contacts).where(eq(schema.contacts.id, (targetAppt as any).contactId)).limit(1);
+          if (dbContacts.length > 0) contact = dbContacts[0];
+        }
+      } catch (dbErr) {
+        console.warn('Public respond DB lookup error:', dbErr);
+      }
+    }
+    if (!targetAppt) {
+      return res.status(404).json({ error: 'Turno no encontrado o ya no está disponible.' });
     }
 
     if (action === 'cancel') {
@@ -1361,9 +1432,9 @@ app.post('/api/appointment/:id/mark-reminder-sent', requireSession, (req, res) =
         timestamp: sharedAgendaStore.lastUpdated,
       });
     }
-    return res.json({ success: true });
+    return res.json({ success: true, publicToken: publicLinkToken(id) });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message });
+    return res.status(500).json({ error: publicError('Error al procesar el turno.', error) });
   }
 });
 
@@ -1390,7 +1461,7 @@ app.delete('/api/appointment/:id', requireSession, async (req, res) => {
 
     return res.json({ success: true, message: 'Turno eliminado correctamente' });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message });
+    return res.status(500).json({ error: publicError('Error al procesar el turno.', error) });
   }
 });
 

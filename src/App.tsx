@@ -320,6 +320,18 @@ export default function App() {
     }
   };
 
+  // Al iniciar sesión se traen los datos del servidor. Antes la carga inicial
+  // corría antes del login (respondía 401) y la agenda quedaba vacía hasta
+  // recargar la página o cambiar de pestaña.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    syncFreshContactsAndAppointments();
+    fetchFromSupabase().then((sbData) => {
+      applyAuxiliaryAgenda(sbData);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
   // Re-sync automatically via backend when mobile or PC browser tab becomes active/visible
   useEffect(() => {
     const handleActiveSync = () => {

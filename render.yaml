@@ -1,0 +1,44 @@
+# Despliegue en Render (Blueprint). La base de datos vive en Supabase.
+# Render → New → Blueprint → elegir este repo. Los valores con "sync: false"
+# se cargan a mano en el panel (no quedan en GitHub).
+services:
+  - type: web
+    name: agenda-odontologica
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start   # ya incluye NODE_ENV=production
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Evita descargar Cypress (solo se usa para pruebas locales).
+      - key: CYPRESS_INSTALL_BINARY
+        value: "0"
+      # Cadena del POOLER de Supabase (Connect → Session pooler).
+      - key: DATABASE_URL
+        sync: false
+      # Contraseña del consultorio (mínimo 12 caracteres).
+      - key: CONSULTORIO_PASSWORD
+        sync: false
+      # Emails que pueden entrar, separados por coma.
+      - key: CONSULTORIO_EMAIL
+        sync: false
+      # Firma de sesión y de los links de WhatsApp: Render la genera sola.
+      - key: SESSION_SECRET
+        generateValue: true
+      # Token para el volcado completo /api/db/all (no se usa en la pantalla).
+      - key: ADMIN_API_TOKEN
+        generateValue: true
+      # Opcional: asistente con IA.
+      - key: GEMINI_API_KEY
+        sync: false
+      # Poner "true" solo unos días después de actualizar, para que sigan
+      # funcionando los links de confirmación que ya se mandaron sin firma.
+      - key: ALLOW_LEGACY_PUBLIC_LINKS
+        value: "false"
