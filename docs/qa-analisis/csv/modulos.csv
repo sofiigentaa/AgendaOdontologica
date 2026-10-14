@@ -1,0 +1,42 @@
+Sistema,Id,Nombre,Pantallas,Actor,Notas
+AO,AO-M01,Acceso,"AuthModal, ChangePasswordModal",Personal del consultorio,Cookie de sesión. Sin roles.
+AO,AO-M02,Pacientes,"ContactFormModal, ContactCard",Personal del consultorio,Nombre y teléfono obligatorios solo en UI.
+AO,AO-M03,Calendario,"CalendarView, DateJumpWidget",Personal del consultorio,"Mes, lista, hoy, filtro por odontóloga."
+AO,AO-M04,Turnos,ScheduleAppointmentModal,Personal del consultorio,Colisión en cliente y en POST /api/appointments.
+AO,AO-M05,Ficha,ContactDetailModal,Personal del consultorio,"Notas, recordatorios, adjuntos, WhatsApp."
+AO,AO-M06,Finanzas,FinanceSummaryModal,Personal del consultorio,Solo turnos completed. Honorario sobre ganancia no negativa.
+AO,AO-M07,Obras sociales,InsuranceFolderModal,Personal del consultorio,Archivos por prepaga. Reglas de nomenclador no definidas.
+AO,AO-M08,Respaldo y borrado,"ResetAgendaModal, export/import",Personal del consultorio,JSON/TXT. Clear exige sesión.
+AO,AO-M09,Confirmación del paciente,PatientConfirmationView,Paciente,"Token firmado, sin sesión de consultorio."
+AO,AO-M10,Opcionales,"AssistantChat, Google, WhatsApp",Personal del consultorio,Dependen de cuentas externas.
+AM,AM-M01,Acceso,LoginScreen,Recepción,Una contraseña. Sin roles.
+AM,AM-M02,Pacientes,"PatientManager, PatientModal",Recepción,DNI único.
+AM,AM-M03,Turnos,"AppointmentModal, CalendarView",Recepción,Lun/Mar/Vie 14:30-20:00. Solape solo en UI.
+AM,AM-M04,Feriados y bloqueos,CalendarView,Recepción,"Feriado, no laborable, vacaciones, NO DAR."
+AM,AM-M05,Finanzas y cierre,DailyFinancialSummary,Recepción,Cierre guarda el total que envía el cliente.
+AM,AM-M06,Importación,"ImportPatientsModal, sync turnos",Recepción,Sheets de lectura. Escritura al limpiar cancelados.
+AM,AM-M07,Backups,BackupManager,Recepción,Historial máx. 30.
+AM,AM-M08,Acción del paciente,PatientActionScreen,Paciente,Confirm/cancel públicos por id.
+SK,SK-M01,Acceso,"LoginScreen, AuthGate",Dueño / cajero,Login solo con Supabase. Sin roles.
+SK,SK-M02,Golondrina,CalandriaHome,Quien repone,Propuestas con aprobación.
+SK,SK-M03,Punto de venta,PosScreen,Cajero,Descuenta stock. No exige caja abierta.
+SK,SK-M04,Inventario,InventoryScreen,Quien compra,Nombre y precio de venta > 0.
+SK,SK-M05,Alertas,AlertsScreen,Quien compra,7 días por vencer. Umbral a validar.
+SK,SK-M06,Caja,CashRegisterModal,Cajero,Efectivo esperado según medio de pago.
+SK,SK-M07,Historial,SalesHistoryScreen,Cajero,Cobro de fiado. Anulación sin UI.
+SK,SK-M08,Reportes,ReportsScreen,Dueño,Hoy UTC vs local.
+SK,SK-M09,Asistente,AsistenteKiosco,Cajero,"Palabras clave, no escribe solo."
+CS,CS-M01,Acceso,LoginScreen,Administración,Contraseña compartida. Sin roles.
+CS,CS-M02,Eventos y pagos,"EventModal, PaymentModal",Quien reserva,getTotalPaid y computeStatus.
+CS,CS-M03,Calendario,CalendarView,Quien reserva,Oculta cancelados. Completed sigue visible.
+CS,CS-M04,Caja,CashflowView,Administración,No resta Devolución.
+CS,CS-M05,Recordatorios,RemindersView,Administración,Tabla reminders.
+CS,CS-M06,Cotizador y contrato,"QuoteCalculatorModal, ContractModal",Quien reserva,Bases 130k/160k/195k no persistidas.
+CS,CS-M07,Respaldo,BackupModal,Administración,Restore no llama a la API.
+CS,CS-M08,Golondrina,CalandriaHome,Administración,Cierre de eventos fully paid pasados.
+IG,IG-M01,Acceso,LoginScreen,Emprendedor,Solo en modo nube. RLS por user_id.
+IG,IG-M02,Dashboard,Dashboard,Emprendedor,Balance del mes puede ser negativo.
+IG,IG-M03,Día,DailyView,Emprendedor,Navegación con toISOString.
+IG,IG-M04,Categorías,CategoryBreakdown,Emprendedor,Sin alta de categorías.
+IG,IG-M05,Historial,"TransactionsTable, TransactionModal",Emprendedor,Monto > 0.
+IG,IG-M06,Exportación y reset,"ExportModal, ResetDataModal",Emprendedor,Import reemplaza. Reset sin conteo.

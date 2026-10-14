@@ -1,0 +1,32 @@
+ID,Sistema,Modulo,Pregunta,Contexto,Estado
+Q-00,Todos,Alcance,¿Estos cinco repositorios se entregan como productos separados?,El análisis los trata como sistemas distintos.,Abierta
+Q-01,Todos,Permisos,¿Hace falta más de un rol o alcanza una contraseña compartida?,"Ningún sistema separa recepción, profesional y administración.",Abierta
+Q-AO-01,AO,AO-M04,¿Agendar de todos modos debe guardar el solape?,La UI y el manual lo ofrecen. El servidor responde 409.,Abierta
+Q-AO-02,AO,AO-M02,¿Qué pasa con los turnos al borrar un paciente?,Hoy quedan huérfanos.,Abierta
+Q-AO-03,AO,AO-M06,¿El honorario puede ser negativo?,El código lo deja en 0.,Abierta
+Q-AO-04,AO,AO-M09,¿El paciente puede confirmar un turno ya atendido?,El endpoint público no lo impide.,Abierta
+Q-AO-05,AO,AO-M02,"¿Teléfono y email tienen formato, y el teléfono es único?",La UI solo exige que no estén vacíos el nombre y el teléfono.,Abierta
+Q-AM-01,AM,AM-M05,¿Existe seña además de los honorarios?,No hay campo ni flujo.,Abierta
+Q-AM-02,AM,AM-M05,¿Facturado cuenta como percibido en el cierre?,La fórmula suma atendido si no está bonificado.,Abierta
+Q-AM-03,AM,AM-M05,¿El servidor debe recalcular el cierre?,Guarda el monto que manda el cliente.,Abierta
+Q-AM-04,AM,AM-M04,¿Un bloqueo NO DAR impide turnos encima?,Hoy no valida solape.,Abierta
+Q-AM-05,AM,AM-M08,¿El link público puede tocar un turno atendido o pasado?,No hay guarda de estado.,Abierta
+Q-AM-06,AM,AM-M03,"¿La agenda sigue siendo una sola, sin profesional?",No hay entidad profesional.,Abierta
+Q-SK-01,SK,SK-M03,¿Se puede vender con la caja cerrada?,El POS no lo impide.,Abierta
+Q-SK-02,SK,SK-M05,"¿El umbral de por vencer es 3, 7 o 15 días?","Golondrina, alertas e inventario usan los tres.",Abierta
+Q-SK-03,SK,SK-M02,¿La liquidación es siempre con una persona que aprueba?,No hay job automático.,Abierta
+Q-SK-04,SK,SK-M03,¿El descuento del ticket debe prorratearse en cada producto?,Solo baja totalProfit.,Abierta
+Q-SK-05,SK,SK-M07,¿Hace falta anular una venta en pantalla?,La función existe y no tiene botón.,Abierta
+Q-SK-06,SK,SK-M03,¿El ítem de monto libre entra al inventario?,Se vende con id efímero y stock 999.,Abierta
+Q-CS-01,CS,CS-M02,¿Cómo se cancela un evento y qué pasa con la seña?,El estado cancelled no se puede elegir.,Abierta
+Q-CS-02,CS,CS-M08,¿Un evento realizado puede tener saldo?,Golondrina solo cierra fully_paid.,Abierta
+Q-CS-03,CS,CS-M04,¿Las devoluciones restan en todas las pantallas?,Caja y resumen no coinciden.,Abierta
+Q-CS-04,CS,CS-M02,¿Dos eventos el mismo día sin hora están permitidos?,El servidor solo choca si la hora coincide.,Abierta
+Q-CS-05,CS,CS-M07,¿Restaurar un backup reemplaza la base?,Hoy no llama a la API.,Abierta
+Q-CS-06,CS,CS-M06,¿El feriado usa tarifa de fin de semana?,No hay calendario de feriados.,Abierta
+Q-CS-07,CS,CS-M06,"¿130000, 160000 y 195000 son precios fijos del salón?",Son defaults de la UI y no se guardan.,Abierta
+Q-IG-01,IG,IG-M05,¿El CSV del historial exporta el filtro o todo?,Hoy exporta todo.,Abierta
+Q-IG-02,IG,IG-M02,¿El registro rápido usa hoy o el mes mirado?,Usa hoy.,Abierta
+Q-IG-03,IG,IG-M06,¿Importar JSON reemplaza o fusiona?,Reemplaza.,Abierta
+Q-IG-04,IG,IG-M04,¿Se pueden crear categorías sin resetear el resto?,No hay editor.,Abierta
+Q-IG-05,IG,IG-M03,¿El uso es solo en Argentina?,El desfase de día no ocurre en Buenos Aires y sí en UTC+.,Abierta
