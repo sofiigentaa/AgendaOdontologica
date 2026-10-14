@@ -18,6 +18,7 @@ import { formatDuration, getTodayISO, formatDateDDMMYYYY } from '../utils/time';
 import { findConflictingAppointment } from '../utils/appointmentConflicts';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { CustomTimePicker } from './CustomTimePicker';
+import { normalizeDentist } from '../utils/dentist';
 
 interface ScheduleAppointmentModalProps {
   isOpen: boolean;
@@ -114,7 +115,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
         setTime(editingAppointment.time);
         setDurationMinutes(editingAppointment.durationMinutes || 30);
         setMotive(editingAppointment.motive || '');
-        setDentist((editingAppointment.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Marie');
+        setDentist(normalizeDentist(editingAppointment.dentist || 'Marie'));
         setCompleted(editingAppointment.completed || false);
         
         setIngresos(editingAppointment.ingresos || 0);
@@ -448,6 +449,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
               <button
                 type="button"
+                data-testid="dentist-ambas"
                 onClick={() => handleDentistChange('Ambas')}
                 className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center transition-all text-center ${
                   dentist === 'Ambas'

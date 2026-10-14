@@ -1,4 +1,5 @@
 import { Appointment } from '../types';
+import { normalizeDentist } from './dentist';
 
 export function timeToMinutes(timeStr: string): number {
   const [h, m] = (timeStr || '').split(':').map(Number);
@@ -28,8 +29,10 @@ export function checkTimeOverlap(
  * a new turn without dentist counts as Marie.
  */
 export function dentistsConflict(existingDentist?: string, targetDentist?: string): boolean {
-  const apptDentist = existingDentist || 'Yani';
-  const nextDentist = targetDentist || 'Marie';
+  const apptDentist = normalizeDentist(existingDentist);
+  const nextDentist = normalizeDentist(
+    targetDentist && String(targetDentist).trim() ? targetDentist : 'Marie'
+  );
   return apptDentist === nextDentist || apptDentist === 'Ambas' || nextDentist === 'Ambas';
 }
 

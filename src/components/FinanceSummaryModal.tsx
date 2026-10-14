@@ -12,8 +12,7 @@ import {
   Copy,
   Check,
   Share2,
-  Clock,
-  AlertCircle
+  Clock
 } from 'lucide-react';
 import { Appointment, Contact } from '../types';
 import {
@@ -21,8 +20,8 @@ import {
   calculateTurnStats,
   filterAppointmentsByFinanceMode,
   isApptAttended,
-  buildDentistPayoutBreakdown,
 } from '../utils/finance';
+import { normalizeDentist } from '../utils/dentist';
 
 interface FinanceSummaryModalProps {
   isOpen: boolean;
@@ -135,7 +134,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
     setEditMateriales(appt.materiales || 0);
     setEditMecanico(appt.mecanicoDental || 0);
     setEditPorcentaje(appt.porcentajeHonorario ?? 50);
-    setEditDentist((appt.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Yani');
+    setEditDentist(normalizeDentist(appt.dentist));
   };
 
   const handleSaveFinances = (apptId: string) => {
@@ -146,7 +145,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
       materiales: editMateriales,
       mecanicoDental: editMecanico,
       porcentajeHonorario: editPorcentaje,
-      dentist: editDentist,
+      dentist: normalizeDentist(editDentist),
     });
     setEditingApptId(null);
   };
@@ -171,15 +170,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
   }, [dayAppointments, filterMode]);
 
   const dailyTotals = useMemo(() => calculateDailyTotals(dayAppointments), [dayAppointments]);
-
-  const yaniBreakdown = useMemo(
-    () => buildDentistPayoutBreakdown(dayAppointments, 'Yani', (id) => getContact(id)?.fullName || 'Paciente'),
-    [dayAppointments, contacts]
-  );
-  const marieBreakdown = useMemo(
-    () => buildDentistPayoutBreakdown(dayAppointments, 'Marie', (id) => getContact(id)?.fullName || 'Paciente'),
-    [dayAppointments, contacts]
-  );
 
   const formatMoney = (val: any) => {
     try {
@@ -216,16 +206,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
     text += `------------------------------------\n`;
     text += `👩‍⚕️ *Liquidación Dra. Marie:* ${formatMoney(dailyTotals.totMarie)}\n`;
     text += `👩‍⚕️ *Liquidación Dra. Yani:* ${formatMoney(dailyTotals.totYani)}\n`;
-    if (marieBreakdown.lines.length > 0) {
-      text += `   Marie: `;
-      text += marieBreakdown.lines.map((l) => `${l.patientName} ${formatMoney(l.share)}`).join(' + ');
-      text += ` = ${formatMoney(marieBreakdown.total)}\n`;
-    }
-    if (yaniBreakdown.lines.length > 0) {
-      text += `   Yani: `;
-      text += yaniBreakdown.lines.map((l) => `${l.patientName} ${formatMoney(l.share)}`).join(' + ');
-      text += ` = ${formatMoney(yaniBreakdown.total)}\n`;
-    }
     text += `------------------------------------\n`;
     text += `📝 *Detalle de Pacientes Atendidos:*\n`;
 
@@ -345,8 +325,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
             </div>
 
             {/* Filter Toggle for any date */}
-            {dayAppointments.length > 0 && (
-              <div className="flex items-center gap-1 bg-emerald-950/80 p-0.5 rounded-lg border border-emerald-800">
+            <div className="flex items-center gap-1 bg-emerald-950/80 p-0.5 rounded-lg border border-emerald-800">
                 <button
                   type="button"
                   onClick={() => setFilterMode('all')}
@@ -381,8 +360,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                   Pendientes ({pendingCount})
                 </button>
               </div>
-            )}
-          </div>
+            </div>
 
           {/* Subheader counts */}
           <div className="flex items-center justify-between text-[11px] px-0.5 text-emerald-200">
@@ -587,9 +565,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                                 type="button"
                                 onClick={() => {
                                   onToggleAppointmentComplete(appt.id);
-                                  if (onShowToast) {
-                                    onShowToast(attended ? 'Turno marcado como pendiente' : '¡Turno marcado como atendido!');
-                                  }
                                 }}
                                 className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer border ${
                                   attended
@@ -910,43 +885,6 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                     </span>
                   </div>
                 </div>
-
-                {(yaniBreakdown.lines.length > 0 || marieBreakdown.lines.length > 0) && (
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-3">
-                    <p className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wide">
-                      Lo que cobra cada una
-                    </p>
-                    {([
-                      { label: 'Dra. Yani', color: 'emerald', data: yaniBreakdown },
-                      { label: 'Dra. Marie', color: 'blue', data: marieBreakdown },
-                    ] as const).map((block) =>
-                      block.data.lines.length === 0 ? null : (
-                        <div key={block.label} className="space-y-1">
-                          <span className={`text-[11px] font-black ${block.color === 'emerald' ? 'text-emerald-800' : 'text-blue-800'}`}>
-                            {block.label}
-                          </span>
-                          {block.data.lines.map((line) => (
-                            <div
-                              key={`${block.label}-${line.appointmentId}`}
-                              className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-800"
-                            >
-                              <span className="truncate">
-                                {line.patientName} ({line.time} hs)
-                              </span>
-                              <span className={block.color === 'emerald' ? 'text-emerald-800' : 'text-blue-800'}>
-                                {formatMoney(line.share)}
-                              </span>
-                            </div>
-                          ))}
-                          <div className={`flex items-center justify-between text-[11px] font-black border-t border-slate-100 pt-1 ${block.color === 'emerald' ? 'text-emerald-900' : 'text-blue-900'}`}>
-                            <span>Total {block.label}</span>
-                            <span>{formatMoney(block.data.total)}</span>
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
 
                 {/* List of Attended Patients */}
                 <div className="pt-2 space-y-1.5">

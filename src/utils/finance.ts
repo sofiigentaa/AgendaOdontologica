@@ -5,6 +5,18 @@ export type FinanceFilterMode = 'all' | 'attendedOnly' | 'pendingOnly';
 
 export type HonorarioBaseKind = 'ganancia' | 'cobrado';
 
+export interface TurnExpenseLines {
+  descartables: number;
+  estampillas: number;
+  materiales: number;
+  mecanico: number;
+}
+
+export interface ClampedTurnExpenses extends TurnExpenseLines {
+  totalEgresos: number;
+  wasClamped: boolean;
+}
+
 export interface TurnFinanceStats {
   ingresos: number;
   descartables: number;
@@ -12,6 +24,7 @@ export interface TurnFinanceStats {
   materiales: number;
   mecanico: number;
   totalEgresos: number;
+  expensesWereClamped: boolean;
   balanceNeto: number;
   pctPercent: number;
   honorarioBase: number;
@@ -21,6 +34,88 @@ export interface TurnFinanceStats {
   correspondyMarie: number;
   dentist: string;
   isAttended: boolean;
+}
+
+export function roundMoney(value: number): number {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+export function sumExpenseLines(lines: TurnExpenseLines): number {
+  return roundMoney(
+    (Number(lines.descartables) || 0) +
+      (Number(lines.estampillas) || 0) +
+      (Number(lines.materiales) || 0) +
+      (Number(lines.mecanico) || 0)
+  );
+}
+
+/** Los gastos de un turno nunca pueden superar lo cobrado. */
+export function clampTurnExpenseLines(
+  ingresos: number,
+  lines: TurnExpenseLines
+): ClampedTurnExpenses {
+  const cobrado = roundMoney(Math.max(0, Number(ingresos) || 0));
+  const raw: TurnExpenseLines = {
+    descartables: roundMoney(Math.max(0, Number(lines.descartables) || 0)),
+    estampillas: roundMoney(Math.max(0, Number(lines.estampillas) || 0)),
+    materiales: roundMoney(Math.max(0, Number(lines.materiales) || 0)),
+    mecanico: roundMoney(Math.max(0, Number(lines.mecanico) || 0)),
+  };
+  const rawTotal = sumExpenseLines(raw);
+  if (rawTotal <= cobrado) {
+    return { ...raw, totalEgresos: rawTotal, wasClamped: false };
+  }
+  if (cobrado <= 0) {
+    return {
+      descartables: 0,
+      estampillas: 0,
+      materiales: 0,
+      mecanico: 0,
+      totalEgresos: 0,
+      wasClamped: true,
+    };
+  }
+  const scale = cobrado / rawTotal;
+  const scaled: TurnExpenseLines = {
+    descartables: roundMoney(raw.descartables * scale),
+    estampillas: roundMoney(raw.estampillas * scale),
+    materiales: roundMoney(raw.materiales * scale),
+    mecanico: roundMoney(raw.mecanico * scale),
+  };
+  let total = sumExpenseLines(scaled);
+  const drift = roundMoney(cobrado - total);
+  if (drift !== 0) {
+    if (scaled.descartables > 0) scaled.descartables = roundMoney(scaled.descartables + drift);
+    else if (scaled.estampillas > 0) scaled.estampillas = roundMoney(scaled.estampillas + drift);
+    else if (scaled.materiales > 0) scaled.materiales = roundMoney(scaled.materiales + drift);
+    else scaled.mecanico = roundMoney(scaled.mecanico + drift);
+    total = cobrado;
+  }
+  return { ...scaled, totalEgresos: total, wasClamped: true };
+}
+
+export function expensesExceedIncome(ingresos: number, lines: TurnExpenseLines): boolean {
+  return sumExpenseLines(lines) > roundMoney(Math.max(0, Number(ingresos) || 0)) + 0.005;
+}
+
+export function sanitizeAppointmentWrite<T extends object>(appt: T): T {
+  const row = appt as T & Partial<Appointment>;
+  const ingresos = roundMoney(Math.max(0, Number(row.ingresos) || 0));
+  const clamped = clampTurnExpenseLines(ingresos, {
+    descartables: Number(row.descartables) || 0,
+    estampillas: Number(row.estampillas) || 0,
+    materiales: Number(row.materiales) || 0,
+    mecanico: Number(row.mecanicoDental) || 0,
+  });
+  return {
+    ...row,
+    dentist: normalizeDentist(row.dentist as string),
+    ingresos,
+    descartables: clamped.descartables,
+    estampillas: clamped.estampillas,
+    materiales: clamped.materiales,
+    mecanicoDental: clamped.mecanico,
+  };
 }
 
 export function isApptAttended(appt: Appointment): boolean {
@@ -36,6 +131,7 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
       materiales: 0,
       mecanico: 0,
       totalEgresos: 0,
+      expensesWereClamped: false,
       balanceNeto: 0,
       pctPercent: 50,
       honorarioBase: 0,
@@ -49,13 +145,15 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
   }
 
   const isAttended = isApptAttended(appt);
-  const ingresos = Number(appt.ingresos) || 0;
-  const descartables = Number(appt.descartables) || 0;
-  const estampillas = Number(appt.estampillas) || 0;
-  const materiales = Number(appt.materiales) || 0;
-  const mecanico = Number(appt.mecanicoDental) || 0;
-  const totalEgresos = descartables + estampillas + materiales + mecanico;
-  const balanceNeto = Math.max(0, ingresos - totalEgresos);
+  const ingresos = roundMoney(Math.max(0, Number(appt.ingresos) || 0));
+  const clamped = clampTurnExpenseLines(ingresos, {
+    descartables: Number(appt.descartables) || 0,
+    estampillas: Number(appt.estampillas) || 0,
+    materiales: Number(appt.materiales) || 0,
+    mecanico: Number(appt.mecanicoDental) || 0,
+  });
+  const { descartables, estampillas, materiales, mecanico, totalEgresos } = clamped;
+  const balanceNeto = roundMoney(Math.max(0, ingresos - totalEgresos));
   const rawPct =
     appt.porcentajeHonorario !== undefined && appt.porcentajeHonorario !== null
       ? Number(appt.porcentajeHonorario)
@@ -87,6 +185,7 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
     materiales,
     mecanico,
     totalEgresos,
+    expensesWereClamped: clamped.wasClamped,
     balanceNeto,
     pctPercent,
     honorarioBase,

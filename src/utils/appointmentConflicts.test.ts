@@ -34,6 +34,8 @@ describe('dentistsConflict', () => {
     expect(dentistsConflict('Marie', 'Marie')).toBe(true);
     expect(dentistsConflict('Ambas', 'Yani')).toBe(true);
     expect(dentistsConflict('Marie', 'Ambas')).toBe(true);
+    expect(dentistsConflict('dra. marie', 'Marie')).toBe(true);
+    expect(dentistsConflict('las dos juntas', 'Yani')).toBe(true);
   });
 });
 
