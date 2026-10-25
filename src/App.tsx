@@ -261,6 +261,7 @@ export default function App() {
   // Authentication gate for dental team
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
+  const [isDemo, setIsDemo] = useState<boolean>(false);
 
   React.useEffect(() => {
     fetch('/api/auth/me', { credentials: 'include' })
@@ -268,6 +269,7 @@ export default function App() {
       .then((d) => {
         if (d?.authenticated) {
           setIsAuthenticated(true);
+          setIsDemo(Boolean(d?.demo));
         } else {
           localStorage.removeItem('auth_session_token');
           setIsAuthenticated(false);
@@ -1325,6 +1327,11 @@ export default function App() {
           localStorage.removeItem('auth_session_token');
           localStorage.removeItem('auth_user_email');
           fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+          if (isDemo) {
+            // En la demo no hay pantalla de ingreso: al salir vuelve a entrar sola.
+            window.location.reload();
+            return;
+          }
           setIsAuthenticated(false);
         }}
       />

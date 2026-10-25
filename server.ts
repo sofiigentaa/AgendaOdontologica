@@ -87,6 +87,17 @@ function sessionSecret() {
   return 'dev-session-secret';
 }
 
+// Instancia de demostración pública: entra sin pantalla de ingreso.
+// Activar SOLO en la copia de demo (DEMO_MODE=true en Render), nunca en la del consultorio.
+function isDemoMode(): boolean {
+  return String(process.env.DEMO_MODE || '').trim().toLowerCase() === 'true';
+}
+const DEMO_EMAIL = 'demo@tecnorosario.ar';
+
+function sessionCookieHeader(token: string): string {
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict${isProduction() ? '; Secure' : ''}`;
+}
+
 function allowedConsultorioPassword(): string {
   if (process.env.CONSULTORIO_PASSWORD) return process.env.CONSULTORIO_PASSWORD;
   return isProduction() ? '' : 'admin123';
@@ -192,7 +203,7 @@ function assertProductionSecrets() {
   if (!isProduction()) return;
   const password = process.env.CONSULTORIO_PASSWORD || '';
   const secret = process.env.SESSION_SECRET || '';
-  if (password.length < 12) {
+  if (password.length < 12 && !isDemoMode()) {
     console.error('Producción: CONSULTORIO_PASSWORD debe tener al menos 12 caracteres. El servidor no arranca.');
     process.exit(1);
   }
@@ -241,16 +252,17 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Email o contraseña incorrectos' });
   }
   const token = signSession(email);
-  res.setHeader(
-    'Set-Cookie',
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict${isProduction() ? '; Secure' : ''}`
-  );
+  res.setHeader('Set-Cookie', sessionCookieHeader(token));
   return res.json({ success: true, email });
 });
 
 app.post('/api/auth/change-password', requireSession, async (req, res) => {
   const currentPassword = String(req.body?.currentPassword || '').trim();
   const newPassword = String(req.body?.newPassword || '').trim();
+
+  if (isDemoMode()) {
+    return res.status(403).json({ success: false, error: 'En la demo no se puede cambiar la contraseña.' });
+  }
 
   if (!isDbConfigured) {
     return res.status(400).json({ success: false, error: 'No hay base de datos conectada: no se puede guardar una contraseña nueva.' });
@@ -279,8 +291,12 @@ app.post('/api/auth/change-password', requireSession, async (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   const session = readSession(req);
-  if (!session) return res.json({ authenticated: false });
-  return res.json({ authenticated: true, email: session.email });
+  if (session) return res.json({ authenticated: true, email: session.email, demo: isDemoMode() });
+  if (isDemoMode() && sessionSecret()) {
+    res.setHeader('Set-Cookie', sessionCookieHeader(signSession(DEMO_EMAIL)));
+    return res.json({ authenticated: true, email: DEMO_EMAIL, demo: true });
+  }
+  return res.json({ authenticated: false });
 });
 
 app.post('/api/auth/logout', (_req, res) => {

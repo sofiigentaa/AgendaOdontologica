@@ -26,6 +26,10 @@ services:
       # Contraseña del consultorio (mínimo 12 caracteres).
       - key: CONSULTORIO_PASSWORD
         sync: false
+      # Solo en la copia de demostración: "true" entra sin pantalla de ingreso.
+      # En la agenda real del consultorio NO cargarla (o dejarla en "false").
+      - key: DEMO_MODE
+        sync: false
       # Emails que pueden entrar, separados por coma.
       - key: CONSULTORIO_EMAIL
         sync: false
