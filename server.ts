@@ -47,7 +47,12 @@ function isAdminRequest(req: express.Request): boolean {
 }
 
 const SESSION_COOKIE = 'agenda_session';
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const loginAttempts = new Map<string, { count: number; resetAt: number; lastAttemptAt: number }>();
+// Después de 8 fallos no se bloquea 15 minutos: se permite 1 intento cada 30 segundos.
+// Si ese intento es correcto, entra. Así quien sabe la clave no queda afuera y un ataque
+// por fuerza bruta queda limitado a ~2 intentos por minuto.
+const LOGIN_FREE_ATTEMPTS = 8;
+const LOGIN_SLOW_INTERVAL_MS = 30 * 1000;
 
 function timingSafeStringEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
@@ -147,24 +152,29 @@ function clientIp(req: express.Request): string {
   return forwarded || req.socket.remoteAddress || 'unknown';
 }
 
-function tooManyFailedLogins(ip: string): boolean {
+/** Segundos que faltan para poder intentar de nuevo (0 = puede intentar ya). */
+function loginWaitSeconds(ip: string): number {
   const now = Date.now();
   const row = loginAttempts.get(ip);
   if (!row || now > row.resetAt) {
     loginAttempts.delete(ip);
-    return false;
+    return 0;
   }
-  return row.count >= 8;
+  if (row.count < LOGIN_FREE_ATTEMPTS) return 0;
+  const remaining = row.lastAttemptAt + LOGIN_SLOW_INTERVAL_MS - now;
+  return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
 }
 
 function recordFailedLogin(ip: string) {
   const now = Date.now();
   const row = loginAttempts.get(ip);
   if (!row || now > row.resetAt) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000, lastAttemptAt: now });
     return;
   }
   row.count += 1;
+  row.lastAttemptAt = now;
+  row.resetAt = now + 15 * 60 * 1000;
 }
 
 function signSession(email: string): string {
@@ -241,8 +251,13 @@ app.get('/api/health', (_req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const ip = clientIp(req);
-  if (tooManyFailedLogins(ip)) {
-    return res.status(429).json({ success: false, error: 'Demasiados intentos. Esperá 15 minutos.' });
+  const waitSeconds = loginWaitSeconds(ip);
+  if (waitSeconds > 0) {
+    return res.status(429).json({
+      success: false,
+      retryAfter: waitSeconds,
+      error: `Hubo varios intentos fallidos. Esperá ${waitSeconds} segundos y volvé a probar.`,
+    });
   }
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '').trim();
@@ -251,6 +266,7 @@ app.post('/api/auth/login', async (req, res) => {
     recordFailedLogin(ip);
     return res.status(401).json({ success: false, error: 'Email o contraseña incorrectos' });
   }
+  loginAttempts.delete(ip);
   const token = signSession(email);
   res.setHeader('Set-Cookie', sessionCookieHeader(token));
   return res.json({ success: true, email });
