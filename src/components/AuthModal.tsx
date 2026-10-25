@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Lock, Mail, KeyRound, AlertCircle, Shield, CheckCircle2, UserCheck } from 'lucide-react';
 
 interface AuthModalProps {
@@ -10,6 +10,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'login' | 'forgot'>('login');
+  const [resetAvailable, setResetAvailable] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/reset-available')
+      .then((r) => r.json())
+      .then((d) => setResetAvailable(Boolean(d?.available)))
+      .catch(() => setResetAvailable(false));
+  }, []);
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setError(data.error || 'No se pudo enviar el email.');
+      else setInfo(data.message || 'Te mandamos un enlace a tu email.');
+    } catch {
+      setError('No se pudo conectar con el servidor. Probá de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchMode = (next: 'login' | 'forgot') => {
+    setMode(next);
+    setError(null);
+    setInfo(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +92,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
             Agenda Odontológica
           </h2>
           <p className="text-xs text-slate-500 font-medium">
-            Acceso exclusivo para el equipo del consultorio
+            {mode === 'forgot'
+              ? 'Escribí tu email y te mandamos un enlace para elegir una contraseña nueva'
+              : 'Acceso exclusivo para el equipo del consultorio'}
           </p>
         </div>
 
@@ -67,7 +106,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* Form */}
+        {info && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800 text-xs">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{info}</span>
+          </div>
+        )}
+
+        {mode === 'forgot' ? (
+          <form onSubmit={handleForgot} className="space-y-4">
+            <div className="space-y-1.5 text-left">
+              <label className="text-xs font-semibold text-slate-700">Tu email</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  data-testid="forgot-email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="odontologo@tuclinica.com"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D5E] focus:border-transparent transition-all"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer disabled:opacity-50"
+            >
+              {loading ? 'Enviando...' : 'Enviarme el enlace'}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('login')}
+              className="w-full text-xs font-semibold text-[#2E7D5E] hover:underline cursor-pointer"
+            >
+              Volver a ingresar
+            </button>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5 text-left">
             <label className="text-xs font-semibold text-slate-700">Email del consultorio</label>
@@ -116,7 +194,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
               <span>Ingresar</span>
             )}
           </button>
+          {resetAvailable && (
+            <button
+              type="button"
+              data-testid="auth-forgot"
+              onClick={() => switchMode('forgot')}
+              className="w-full text-xs font-semibold text-[#2E7D5E] hover:underline cursor-pointer"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          )}
         </form>
+        )}
 
         {/* Security badges */}
         <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-medium">

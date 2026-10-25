@@ -50,6 +50,7 @@ import { FinanceSummaryModal } from './components/FinanceSummaryModal';
 import { ResetAgendaModal } from './components/ResetAgendaModal';
 import { PatientConfirmationView } from './components/PatientConfirmationView';
 import { AuthModal } from './components/AuthModal';
+import { ResetPasswordView } from './components/ResetPasswordView';
 import { AssistantChat } from './components/AssistantChat';
 import { Toast } from './components/Toast';
 import { PatientSearchSelect } from './components/PatientSearchSelect';
@@ -1268,6 +1269,11 @@ export default function App() {
         <div className="w-10 h-10 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin"></div>
       </div>
     );
+  }
+
+  const resetToken = urlParams?.get('reset');
+  if (resetToken) {
+    return <ResetPasswordView token={resetToken} />;
   }
 
   if (!isAuthenticated) {

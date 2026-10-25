@@ -39,6 +39,13 @@ services:
       # Token para el volcado completo /api/db/all (no se usa en la pantalla).
       - key: ADMIN_API_TOKEN
         generateValue: true
+      # Opcional: "¿Olvidaste tu contraseña?" por email (Brevo, plan gratis).
+      # Necesita también CONSULTORIO_EMAIL con los emails habilitados.
+      - key: BREVO_API_KEY
+        sync: false
+      # Email remitente verificado en Brevo (Senders).
+      - key: MAIL_FROM
+        sync: false
       # Opcional: asistente con IA.
       - key: GEMINI_API_KEY
         sync: false

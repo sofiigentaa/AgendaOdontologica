@@ -315,6 +315,148 @@ app.get('/api/auth/me', (req, res) => {
   return res.json({ authenticated: false });
 });
 
+// ---------------------------------------------------------------------------
+// Recuperar contraseña por email ("¿Olvidaste tu contraseña?")
+// Render gratis bloquea SMTP, así que el mail sale por la API HTTP de Brevo.
+// Requiere: CONSULTORIO_EMAIL (lista cerrada de emails), BREVO_API_KEY, MAIL_FROM,
+// base de datos (para guardar la clave nueva) y APP_URL o RENDER_EXTERNAL_URL.
+// ---------------------------------------------------------------------------
+const RESET_TTL_MS = 30 * 60 * 1000;
+const forgotRequests = new Map<string, { count: number; resetAt: number }>();
+
+function allowedEmailList(): string[] {
+  return (process.env.CONSULTORIO_EMAIL || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function appBaseUrl(): string {
+  return (process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
+}
+
+function passwordResetAvailable(): boolean {
+  return (
+    !isDemoMode() &&
+    isDbConfigured &&
+    allowedEmailList().length > 0 &&
+    Boolean(process.env.BREVO_API_KEY && process.env.MAIL_FROM && appBaseUrl() && sessionSecret())
+  );
+}
+
+// Huella de la clave actual: al cambiarla, los enlaces anteriores dejan de servir (un solo uso).
+async function currentPasswordFingerprint(): Promise<string> {
+  const stored = (await getStoredPasswordHash()) || allowedConsultorioPassword();
+  return crypto.createHash('sha256').update(`reset-fp:${stored}`).digest('hex').slice(0, 24);
+}
+
+async function signResetToken(email: string): Promise<string> {
+  const payload = Buffer.from(
+    JSON.stringify({ email, exp: Date.now() + RESET_TTL_MS, fp: await currentPasswordFingerprint() })
+  ).toString('base64url');
+  const sig = crypto.createHmac('sha256', sessionSecret()).update(`reset:${payload}`).digest('hex');
+  return `${payload}.${sig}`;
+}
+
+async function readResetToken(token: string): Promise<{ email: string } | null> {
+  if (!sessionSecret()) return null;
+  const [payload, sig] = String(token || '').split('.');
+  if (!payload || !sig) return null;
+  const expected = crypto.createHmac('sha256', sessionSecret()).update(`reset:${payload}`).digest('hex');
+  if (!timingSafeStringEqual(sig, expected)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!data.exp || data.exp < Date.now()) return null;
+    if (data.fp !== (await currentPasswordFingerprint())) return null;
+    if (!allowedEmailList().includes(String(data.email || ''))) return null;
+    return { email: data.email };
+  } catch {
+    return null;
+  }
+}
+
+async function sendResetEmail(to: string, link: string): Promise<void> {
+  const html = `
+    <div style="font-family:Arial,sans-serif;font-size:15px;color:#1e293b;line-height:1.5">
+      <p>Hola,</p>
+      <p>Pediste cambiar la contraseña de la Agenda Odontológica. Tocá el botón para elegir una nueva:</p>
+      <p><a href="${link}" style="display:inline-block;background:#2E7D5E;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold">Elegir contraseña nueva</a></p>
+      <p style="font-size:13px;color:#64748b">El enlace vence en 30 minutos y sirve una sola vez. Si no lo pediste vos, ignorá este mail: tu contraseña no cambia.</p>
+    </div>`;
+  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': String(process.env.BREVO_API_KEY), 'Content-Type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({
+      sender: { name: process.env.MAIL_FROM_NAME || 'Agenda Odontológica', email: process.env.MAIL_FROM },
+      to: [{ email: to }],
+      subject: 'Cambiar la contraseña de la Agenda Odontológica',
+      htmlContent: html,
+    }),
+  });
+  if (!r.ok) throw new Error(`Brevo respondió ${r.status}: ${await r.text().catch(() => '')}`);
+}
+
+app.get('/api/auth/reset-available', (_req, res) => {
+  res.json({ available: passwordResetAvailable() });
+});
+
+app.post('/api/auth/forgot', async (req, res) => {
+  const generic = {
+    success: true,
+    message: 'Si ese email está habilitado, te mandamos un enlace para cambiar la contraseña. Revisá también la carpeta de spam.',
+  };
+  if (!passwordResetAvailable()) {
+    return res.status(503).json({ success: false, error: 'La recuperación por email no está configurada. Pedile la contraseña a quien administra la agenda.' });
+  }
+  const ip = clientIp(req);
+  const now = Date.now();
+  const row = forgotRequests.get(ip);
+  if (row && now < row.resetAt && row.count >= 3) {
+    return res.status(429).json({ success: false, error: 'Ya pediste varios enlaces. Esperá unos minutos y revisá tu email.' });
+  }
+  if (!row || now >= row.resetAt) forgotRequests.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+  else row.count += 1;
+
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  // Solo se manda a emails de la lista; la respuesta es la misma para no revelar cuáles existen.
+  if (email.includes('@') && allowedEmailList().includes(email)) {
+    try {
+      const token = await signResetToken(email);
+      await sendResetEmail(email, `${appBaseUrl()}/?reset=${encodeURIComponent(token)}`);
+    } catch (err) {
+      console.error('No se pudo enviar el mail de recuperación:', err);
+      return res.status(502).json({ success: false, error: 'No se pudo enviar el email. Probá de nuevo en unos minutos.' });
+    }
+  }
+  return res.json(generic);
+});
+
+app.post('/api/auth/reset', async (req, res) => {
+  if (!passwordResetAvailable()) {
+    return res.status(503).json({ success: false, error: 'La recuperación por email no está configurada.' });
+  }
+  const data = await readResetToken(String(req.body?.token || ''));
+  if (!data) {
+    return res.status(400).json({ success: false, error: 'El enlace venció o ya se usó. Pedí uno nuevo desde «¿Olvidaste tu contraseña?».' });
+  }
+  const newPassword = String(req.body?.newPassword || '').trim();
+  if (newPassword.length < 12) {
+    return res.status(400).json({ success: false, error: 'La nueva contraseña debe tener al menos 12 caracteres.' });
+  }
+  const passwordHash = hashPassword(newPassword);
+  const updatedAt = new Date().toISOString();
+  try {
+    await db
+      .insert(schema.authSettings)
+      .values({ id: AUTH_SETTINGS_ID, passwordHash, updatedAt })
+      .onConflictDoUpdate({ target: schema.authSettings.id, set: { passwordHash, updatedAt } });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: publicError('No se pudo guardar la nueva contraseña.', err) });
+  }
+  loginAttempts.clear();
+  return res.json({ success: true, email: data.email });
+});
+
 app.post('/api/auth/logout', (_req, res) => {
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
   res.json({ success: true });
