@@ -292,16 +292,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
               <span>Ingresar</span>
             )}
           </button>
-          {resetAvailable && (
-            <button
-              type="button"
-              data-testid="auth-forgot"
-              onClick={() => switchMode('forgot')}
-              className="w-full text-xs font-semibold text-[#2E7D5E] hover:underline cursor-pointer"
-            >
-              ¿Olvidaste tu contraseña?
-            </button>
-          )}
+          <button
+            type="button"
+            data-testid="auth-forgot"
+            onClick={() => switchMode('forgot')}
+            className="w-full text-xs font-semibold text-[#2E7D5E] hover:underline cursor-pointer"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
           <button
             type="button"
             data-testid="auth-register"
