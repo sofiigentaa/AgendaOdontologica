@@ -306,6 +306,47 @@ app.post('/api/auth/change-password', requireSession, async (req, res) => {
   return res.json({ success: true });
 });
 
+app.post('/api/auth/register', async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '').trim();
+
+  if (isDemoMode()) {
+    return res.status(403).json({ success: false, error: 'En la demo no se puede registrar.' });
+  }
+
+  if (!isDbConfigured) {
+    return res.status(400).json({ success: false, error: 'No hay base de datos conectada: no se puede guardar la cuenta.' });
+  }
+  if (password.length < 12) {
+    return res.status(400).json({ success: false, error: 'La contraseña debe tener al menos 12 caracteres.' });
+  }
+  if (!email.includes('@') || email.length > 254) {
+    return res.status(400).json({ success: false, error: 'Ingresá un email válido.' });
+  }
+  const allowed = allowedEmailList();
+  if (allowed.length > 0 && !allowed.includes(email)) {
+    return res.status(400).json({ success: false, error: 'Ese email no está habilitado.' });
+  }
+  if (name.length < 2) {
+    return res.status(400).json({ success: false, error: 'Ingresá el nombre del odontólogo.' });
+  }
+
+  const passwordHash = hashPassword(password);
+  const updatedAt = new Date().toISOString();
+  try {
+    await db
+      .insert(schema.authSettings)
+      .values({ id: AUTH_SETTINGS_ID, passwordHash, updatedAt })
+      .onConflictDoUpdate({ target: schema.authSettings.id, set: { passwordHash, updatedAt } });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: publicError('No se pudo guardar la cuenta.', err) });
+  }
+
+  loginAttempts.clear();
+  return res.json({ success: true, email });
+});
+
 app.get('/api/auth/me', (req, res) => {
   const session = readSession(req);
   if (session) return res.json({ authenticated: true, email: session.email, demo: isDemoMode() });
