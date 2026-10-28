@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { checkTimeOverlap, dentistsConflict, isAppointmentBlockingCalendar } from './src/utils/appointmentConflicts.ts';
 import path from 'path';
