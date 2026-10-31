@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Contact } from '../types';
 import { OBRAS_SOCIALES_LIST } from '../constants/insurances';
+import { isValidEmailAddress, isValidPersonName, isValidPhoneNumber } from '../utils/inputValidation';
 
 interface ContactFormModalProps {
   isOpen: boolean;
@@ -56,7 +57,12 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
   const [observations, setObservations] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
   const [avatarColor, setAvatarColor] = useState('bg-[#2E7D5E]');
-  const [errors, setErrors] = useState<{ fullName?: string; primaryPhone?: string }>({});
+  const [errors, setErrors] = useState<{
+    fullName?: string;
+    primaryPhone?: string;
+    altPhone?: string;
+    email?: string;
+  }>({});
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -119,13 +125,22 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
-    const newErrors: { fullName?: string; primaryPhone?: string } = {};
+    const newErrors: typeof errors = {};
     if (!fullName.trim()) {
       newErrors.fullName = 'El nombre y apellido es obligatorio';
+    } else if (!isValidPersonName(fullName)) {
+      newErrors.fullName = 'Ingresá solo letras, espacios, puntos, apóstrofes o guiones.';
     }
     if (!primaryPhone.trim()) {
       newErrors.primaryPhone = 'El teléfono principal es obligatorio';
+    } else if (!isValidPhoneNumber(primaryPhone)) {
+      newErrors.primaryPhone = 'Ingresá un teléfono válido con al menos 6 dígitos.';
+    }
+    if (altPhone.trim() && !isValidPhoneNumber(altPhone)) {
+      newErrors.altPhone = 'Ingresá un teléfono válido con al menos 6 dígitos.';
+    }
+    if (email.trim() && !isValidEmailAddress(email)) {
+      newErrors.email = 'Ingresá un correo electrónico válido.';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -185,7 +200,7 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
         </div>
 
         {/* Modal Form */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto">
+        <form noValidate onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto">
           
           {/* Section 1: Basic Info */}
           <div className="space-y-4">
@@ -211,6 +226,7 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                 className={`w-full px-3.5 py-2.5 bg-slate-50 border ${
                   errors.fullName ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-300'
                 } rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all`}
+                aria-invalid={Boolean(errors.fullName)}
               />
               {errors.fullName && (
                 <p className="text-xs text-rose-500 mt-1 font-medium">{errors.fullName}</p>
@@ -412,7 +428,8 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="tel"
                     data-testid="contact-phone"
                     value={primaryPhone}
                     onChange={(e) => {
@@ -423,6 +440,7 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                     className={`w-full pl-9 pr-3 py-2 bg-slate-50 border ${
                       errors.primaryPhone ? 'border-rose-500 ring-1 ring-rose-500' : 'border-slate-300'
                     } rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white`}
+                    aria-invalid={Boolean(errors.primaryPhone)}
                   />
                 </div>
                 {errors.primaryPhone && (
@@ -438,13 +456,21 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="tel"
                     value={altPhone}
-                    onChange={(e) => setAltPhone(e.target.value)}
+                    onChange={(e) => {
+                      setAltPhone(e.target.value);
+                      if (errors.altPhone) setErrors((prev) => ({ ...prev, altPhone: undefined }));
+                    }}
                     placeholder="Ej: +541148210033"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    aria-invalid={Boolean(errors.altPhone)}
                   />
                 </div>
+                {errors.altPhone && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.altPhone}</p>
+                )}
               </div>
 
               {/* Email */}
@@ -457,11 +483,18 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                    }}
                     placeholder="ejemplo@correo.com"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    aria-invalid={Boolean(errors.email)}
                   />
                 </div>
+                {errors.email && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.email}</p>
+                )}
               </div>
 
               {/* Address */}

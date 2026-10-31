@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
 import { KeyRound, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
-
-interface ResetPasswordViewProps {
-  token: string;
-}
+import { supabase } from '../supabaseClient';
 
 // Pantalla a la que lleva el enlace del mail de «¿Olvidaste tu contraseña?».
-export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({ token }) => {
+export const ResetPasswordView: React.FC = () => {
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -30,16 +27,17 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({ token }) =
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, newPassword: password.trim() }),
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+      setDone(true);
+      await supabase.auth.signOut().catch((signOutError) => {
+        console.error('No se pudo cerrar la sesión después de recuperar la contraseña:', signOutError);
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || 'No se pudo cambiar la contraseña.');
-      else setDone(true);
-    } catch {
-      setError('No se pudo conectar con el servidor. Probá de nuevo.');
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch((logoutError) => {
+        console.error('No se pudo borrar la sesión de la agenda:', logoutError);
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cambiar la contraseña.');
     } finally {
       setLoading(false);
     }
@@ -57,7 +55,7 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({ token }) =
           </div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">Contraseña nueva</h2>
           <p className="text-xs text-slate-500 font-medium">
-            Es la contraseña de todo el consultorio: avisale al resto del equipo.
+            Esta contraseña corresponde a tu cuenta personal.
           </p>
         </div>
 
@@ -65,7 +63,7 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({ token }) =
           <div className="space-y-4">
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800 text-xs">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Listo, la contraseña se cambió. Ya podés ingresar con la nueva.</span>
+              <span>Listo, cambiaste la contraseña de tu cuenta. Ya podés ingresar con la nueva.</span>
             </div>
             <button
               type="button"

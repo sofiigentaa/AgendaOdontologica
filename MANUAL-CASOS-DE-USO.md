@@ -1,7 +1,7 @@
 # Manual de casos de uso - Agenda Odontológica
 
 Actor principal: personal del consultorio (Marie, Yani o recepción).  
-Precondición común: haber ingresado al sistema (email + contraseña de demo).
+Precondición común: haber ingresado con una cuenta habilitada del equipo.
 
 ---
 
@@ -12,10 +12,14 @@ Precondición común: haber ingresado al sistema (email + contraseña de demo).
 
 1. Abrir la URL o `http://localhost:3000`
 2. Completar email
-3. Completar contraseña (`admin123` en demo)
+3. Completar la contraseña personal de Supabase Auth
 4. Pulsar **Ingresar**
 
 **Resultado:** se ve el calendario o el listado de pacientes.
+
+Para registrar una cuenta, usar un email incluido en `CONSULTORIO_EMAIL` y confirmar
+el enlace que envía Supabase. Las cuentas son individuales; la agenda permanece compartida.
+La demo pública puede entrar automáticamente cuando `DEMO_MODE=true`.
 
 ---
 
@@ -156,5 +160,4 @@ Precondición común: haber ingresado al sistema (email + contraseña de demo).
 **Resultado:** el turno queda confirmado o el horario libre (si el enlace y el servidor están disponibles).
 
 ---
-
 

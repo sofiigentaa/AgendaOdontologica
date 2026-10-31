@@ -48,12 +48,6 @@ function isAdminRequest(req: express.Request): boolean {
 }
 
 const SESSION_COOKIE = 'agenda_session';
-const loginAttempts = new Map<string, { count: number; resetAt: number; lastAttemptAt: number }>();
-// Después de 8 fallos no se bloquea 15 minutos: se permite 1 intento cada 30 segundos.
-// Si ese intento es correcto, entra. Así quien sabe la clave no queda afuera y un ataque
-// por fuerza bruta queda limitado a ~2 intentos por minuto.
-const LOGIN_FREE_ATTEMPTS = 8;
-const LOGIN_SLOW_INTERVAL_MS = 30 * 1000;
 
 function timingSafeStringEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
@@ -104,82 +98,17 @@ function sessionCookieHeader(token: string): string {
   return `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${12 * 60 * 60}; SameSite=Strict${isProduction() ? '; Secure' : ''}`;
 }
 
-function allowedConsultorioPassword(): string {
-  if (process.env.CONSULTORIO_PASSWORD) return process.env.CONSULTORIO_PASSWORD;
-  return isProduction() ? '' : 'admin123';
-}
-
-const AUTH_SETTINGS_ID = 'default';
-
-function hashPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-}
-
-function verifyPassword(password: string, stored: string): boolean {
-  const [salt, hash] = stored.split(':');
-  if (!salt || !hash) return false;
-  const candidate = crypto.scryptSync(password, salt, 64).toString('hex');
-  return timingSafeStringEqual(candidate, hash);
-}
-
-async function getStoredPasswordHash(): Promise<string | null> {
-  if (!isDbConfigured) return null;
-  try {
-    const rows = await db.select().from(schema.authSettings).where(eq(schema.authSettings.id, AUTH_SETTINGS_ID)).limit(1);
-    return rows[0]?.passwordHash || null;
-  } catch {
-    return null;
-  }
-}
-
-async function checkConsultorioPassword(password: string): Promise<boolean> {
-  const storedHash = await getStoredPasswordHash();
-  if (storedHash) return verifyPassword(password, storedHash);
-  const expected = allowedConsultorioPassword();
-  return Boolean(expected) && timingSafeStringEqual(password, expected);
-}
-
-function emailAllowed(email: string): boolean {
-  const raw = (process.env.CONSULTORIO_EMAIL || '').trim();
-  if (!raw) return true;
-  const allowed = raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return allowed.includes(email);
-}
-
 function clientIp(req: express.Request): string {
   const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   return forwarded || req.socket.remoteAddress || 'unknown';
 }
 
-/** Segundos que faltan para poder intentar de nuevo (0 = puede intentar ya). */
-function loginWaitSeconds(ip: string): number {
-  const now = Date.now();
-  const row = loginAttempts.get(ip);
-  if (!row || now > row.resetAt) {
-    loginAttempts.delete(ip);
-    return 0;
-  }
-  if (row.count < LOGIN_FREE_ATTEMPTS) return 0;
-  const remaining = row.lastAttemptAt + LOGIN_SLOW_INTERVAL_MS - now;
-  return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
-}
-
-function recordFailedLogin(ip: string) {
-  const now = Date.now();
-  const row = loginAttempts.get(ip);
-  if (!row || now > row.resetAt) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000, lastAttemptAt: now });
-    return;
-  }
-  row.count += 1;
-  row.lastAttemptAt = now;
-  row.resetAt = now + 15 * 60 * 1000;
-}
-
-function signSession(email: string): string {
-  const payload = Buffer.from(JSON.stringify({ email, exp: Date.now() + 12 * 60 * 60 * 1000 })).toString('base64url');
+function signSession(email: string, authType: 'supabase' | 'demo' = 'supabase'): string {
+  const payload = Buffer.from(JSON.stringify({
+    email,
+    exp: Date.now() + 12 * 60 * 60 * 1000,
+    authType,
+  })).toString('base64url');
   const sig = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex');
   return `${payload}.${sig}`;
 }
@@ -199,6 +128,8 @@ function readSession(req: express.Request): { email: string } | null {
   try {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     if (!data.exp || data.exp < Date.now()) return null;
+    if (data.authType === 'demo') return isDemoMode() ? { email: DEMO_EMAIL } : null;
+    if (data.authType !== 'supabase' || !isAccountEmailAllowed(data.email)) return null;
     return { email: data.email };
   } catch {
     return null;
@@ -212,10 +143,9 @@ function requireSession(req: express.Request, res: express.Response, next: expre
 
 function assertProductionSecrets() {
   if (!isProduction()) return;
-  const password = process.env.CONSULTORIO_PASSWORD || '';
   const secret = process.env.SESSION_SECRET || '';
-  if (password.length < 12 && !isDemoMode()) {
-    console.error('Producción: CONSULTORIO_PASSWORD debe tener al menos 12 caracteres. El servidor no arranca.');
+  if (!isDemoMode() && !supabaseAuthConfigured()) {
+    console.error('Producción: configurar Supabase Auth y CONSULTORIO_EMAIL antes de iniciar el servidor.');
     process.exit(1);
   }
   if (secret.length < 32) {
@@ -229,6 +159,26 @@ function supabaseEnv() {
   const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   return { url, key };
+}
+
+function allowedEmailList(): string[] {
+  return (process.env.CONSULTORIO_EMAIL || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isValidAuthEmail(email: string): boolean {
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isAccountEmailAllowed(email: unknown): boolean {
+  if (typeof email !== 'string' || !isValidAuthEmail(email)) return false;
+  return allowedEmailList().includes(email.trim().toLowerCase());
+}
+
+function supabaseAuthConfigured(): boolean {
+  return Boolean(!isDemoMode() && supabaseEnv() && allowedEmailList().length > 0);
 }
 
 function patchSupabaseAppointment(id: string, body: Record<string, unknown>) {
@@ -250,255 +200,79 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, dbAvailable: isDbConfigured });
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  const ip = clientIp(req);
-  const waitSeconds = loginWaitSeconds(ip);
-  if (waitSeconds > 0) {
-    return res.status(429).json({
-      success: false,
-      retryAfter: waitSeconds,
-      error: `Hubo varios intentos fallidos. Esperá ${waitSeconds} segundos y volvé a probar.`,
-    });
-  }
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '').trim();
-  const passwordOk = await checkConsultorioPassword(password);
-  if (!email.includes('@') || !emailAllowed(email) || !passwordOk) {
-    recordFailedLogin(ip);
-    return res.status(401).json({ success: false, error: 'Email o contraseña incorrectos' });
-  }
-  loginAttempts.delete(ip);
-  const token = signSession(email);
-  res.setHeader('Set-Cookie', sessionCookieHeader(token));
-  return res.json({ success: true, email });
+const registrationChecks = new Map<string, { count: number; resetAt: number }>();
+
+app.get('/api/auth/config', (_req, res) => {
+  res.json({ configured: supabaseAuthConfigured(), demo: isDemoMode() });
 });
 
-app.post('/api/auth/change-password', requireSession, async (req, res) => {
-  const currentPassword = String(req.body?.currentPassword || '').trim();
-  const newPassword = String(req.body?.newPassword || '').trim();
-
-  if (isDemoMode()) {
-    return res.status(403).json({ success: false, error: 'En la demo no se puede cambiar la contraseña.' });
+app.post('/api/auth/registration-check', (req, res) => {
+  if (!supabaseAuthConfigured()) {
+    return res.status(503).json({ success: false, error: 'La autenticación de Supabase todavía no está configurada.' });
   }
 
-  if (!isDbConfigured) {
-    return res.status(400).json({ success: false, error: 'No hay base de datos conectada: no se puede guardar una contraseña nueva.' });
+  const ip = clientIp(req);
+  const now = Date.now();
+  const attempt = registrationChecks.get(ip);
+  if (attempt && now < attempt.resetAt && attempt.count >= 30) {
+    return res.status(429).json({ success: false, error: 'Demasiados intentos. Esperá unos minutos y volvé a probar.' });
   }
-  if (newPassword.length < 12) {
-    return res.status(400).json({ success: false, error: 'La nueva contraseña debe tener al menos 12 caracteres.' });
-  }
-  const currentOk = await checkConsultorioPassword(currentPassword);
-  if (!currentOk) {
-    return res.status(401).json({ success: false, error: 'La contraseña actual no es correcta.' });
-  }
+  if (!attempt || now >= attempt.resetAt) registrationChecks.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+  else attempt.count += 1;
 
-  const passwordHash = hashPassword(newPassword);
-  const updatedAt = new Date().toISOString();
-  try {
-    await db
-      .insert(schema.authSettings)
-      .values({ id: AUTH_SETTINGS_ID, passwordHash, updatedAt })
-      .onConflictDoUpdate({ target: schema.authSettings.id, set: { passwordHash, updatedAt } });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: publicError('No se pudo guardar la nueva contraseña.', err) });
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!isAccountEmailAllowed(email)) {
+    return res.status(403).json({ success: false, error: 'Ese email no está habilitado para la agenda.' });
   }
-
   return res.json({ success: true });
 });
 
-app.post('/api/auth/register', async (req, res) => {
-  const name = String(req.body?.name || '').trim();
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '').trim();
-
-  if (isDemoMode()) {
-    return res.status(403).json({ success: false, error: 'En la demo no se puede registrar.' });
+app.post('/api/auth/session', async (req, res) => {
+  const supabase = supabaseEnv();
+  if (!supabaseAuthConfigured() || !supabase) {
+    return res.status(503).json({ success: false, error: 'La autenticación de Supabase todavía no está configurada.' });
   }
 
-  if (!isDbConfigured) {
-    return res.status(400).json({ success: false, error: 'No hay base de datos conectada: no se puede guardar la cuenta.' });
-  }
-  if (password.length < 12) {
-    return res.status(400).json({ success: false, error: 'La contraseña debe tener al menos 12 caracteres.' });
-  }
-  if (!email.includes('@') || email.length > 254) {
-    return res.status(400).json({ success: false, error: 'Ingresá un email válido.' });
-  }
-  const allowed = allowedEmailList();
-  if (allowed.length > 0 && !allowed.includes(email)) {
-    return res.status(400).json({ success: false, error: 'Ese email no está habilitado.' });
-  }
-  if (name.length < 2) {
-    return res.status(400).json({ success: false, error: 'Ingresá el nombre del odontólogo.' });
+  const authorization = String(req.headers.authorization || '');
+  const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  if (!accessToken || accessToken.length > 4096) {
+    return res.status(401).json({ success: false, error: 'Sesión inválida. Volvé a ingresar.' });
   }
 
-  const passwordHash = hashPassword(password);
-  const updatedAt = new Date().toISOString();
   try {
-    await db
-      .insert(schema.authSettings)
-      .values({ id: AUTH_SETTINGS_ID, passwordHash, updatedAt })
-      .onConflictDoUpdate({ target: schema.authSettings.id, set: { passwordHash, updatedAt } });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: publicError('No se pudo guardar la cuenta.', err) });
-  }
+    const response = await fetch(`${supabase.url}/auth/v1/user`, {
+      headers: { apikey: supabase.key, Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) {
+      return res.status(401).json({ success: false, error: 'La sesión de Supabase venció. Volvé a ingresar.' });
+    }
 
-  loginAttempts.clear();
-  return res.json({ success: true, email });
+    const user = await response.json();
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!(user?.email_confirmed_at || user?.confirmed_at) || !isAccountEmailAllowed(email)) {
+      return res.status(403).json({ success: false, error: 'El email no está confirmado o no está habilitado para la agenda.' });
+    }
+
+    res.setHeader('Set-Cookie', sessionCookieHeader(signSession(email)));
+    return res.json({ success: true, email });
+  } catch (err) {
+    console.error('No se pudo validar la sesión de Supabase:', err);
+    return res.status(502).json({ success: false, error: 'No se pudo validar la sesión. Probá de nuevo.' });
+  }
 });
 
 app.get('/api/auth/me', (req, res) => {
   const session = readSession(req);
   if (session) return res.json({ authenticated: true, email: session.email, demo: isDemoMode() });
   if (isDemoMode() && sessionSecret()) {
-    res.setHeader('Set-Cookie', sessionCookieHeader(signSession(DEMO_EMAIL)));
+    res.setHeader('Set-Cookie', sessionCookieHeader(signSession(DEMO_EMAIL, 'demo')));
     return res.json({ authenticated: true, email: DEMO_EMAIL, demo: true });
   }
   return res.json({ authenticated: false });
 });
 
 // ---------------------------------------------------------------------------
-// Recuperar contraseña por email ("¿Olvidaste tu contraseña?")
-// Render gratis bloquea SMTP, así que el mail sale por la API HTTP de Brevo.
-// Requiere: CONSULTORIO_EMAIL (lista cerrada de emails), BREVO_API_KEY, MAIL_FROM,
-// base de datos (para guardar la clave nueva) y APP_URL o RENDER_EXTERNAL_URL.
-// ---------------------------------------------------------------------------
-const RESET_TTL_MS = 30 * 60 * 1000;
-const forgotRequests = new Map<string, { count: number; resetAt: number }>();
-
-function allowedEmailList(): string[] {
-  return (process.env.CONSULTORIO_EMAIL || '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-function appBaseUrl(): string {
-  return (process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
-}
-
-function passwordResetAvailable(): boolean {
-  return (
-    !isDemoMode() &&
-    isDbConfigured &&
-    allowedEmailList().length > 0 &&
-    Boolean(process.env.BREVO_API_KEY && process.env.MAIL_FROM && appBaseUrl() && sessionSecret())
-  );
-}
-
-// Huella de la clave actual: al cambiarla, los enlaces anteriores dejan de servir (un solo uso).
-async function currentPasswordFingerprint(): Promise<string> {
-  const stored = (await getStoredPasswordHash()) || allowedConsultorioPassword();
-  return crypto.createHash('sha256').update(`reset-fp:${stored}`).digest('hex').slice(0, 24);
-}
-
-async function signResetToken(email: string): Promise<string> {
-  const payload = Buffer.from(
-    JSON.stringify({ email, exp: Date.now() + RESET_TTL_MS, fp: await currentPasswordFingerprint() })
-  ).toString('base64url');
-  const sig = crypto.createHmac('sha256', sessionSecret()).update(`reset:${payload}`).digest('hex');
-  return `${payload}.${sig}`;
-}
-
-async function readResetToken(token: string): Promise<{ email: string } | null> {
-  if (!sessionSecret()) return null;
-  const [payload, sig] = String(token || '').split('.');
-  if (!payload || !sig) return null;
-  const expected = crypto.createHmac('sha256', sessionSecret()).update(`reset:${payload}`).digest('hex');
-  if (!timingSafeStringEqual(sig, expected)) return null;
-  try {
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (!data.exp || data.exp < Date.now()) return null;
-    if (data.fp !== (await currentPasswordFingerprint())) return null;
-    if (!allowedEmailList().includes(String(data.email || ''))) return null;
-    return { email: data.email };
-  } catch {
-    return null;
-  }
-}
-
-async function sendResetEmail(to: string, link: string): Promise<void> {
-  const html = `
-    <div style="font-family:Arial,sans-serif;font-size:15px;color:#1e293b;line-height:1.5">
-      <p>Hola,</p>
-      <p>Pediste cambiar la contraseña de la Agenda Odontológica. Tocá el botón para elegir una nueva:</p>
-      <p><a href="${link}" style="display:inline-block;background:#2E7D5E;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold">Elegir contraseña nueva</a></p>
-      <p style="font-size:13px;color:#64748b">El enlace vence en 30 minutos y sirve una sola vez. Si no lo pediste vos, ignorá este mail: tu contraseña no cambia.</p>
-    </div>`;
-  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': String(process.env.BREVO_API_KEY), 'Content-Type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({
-      sender: { name: process.env.MAIL_FROM_NAME || 'Agenda Odontológica', email: process.env.MAIL_FROM },
-      to: [{ email: to }],
-      subject: 'Cambiar la contraseña de la Agenda Odontológica',
-      htmlContent: html,
-    }),
-  });
-  if (!r.ok) throw new Error(`Brevo respondió ${r.status}: ${await r.text().catch(() => '')}`);
-}
-
-app.get('/api/auth/reset-available', (_req, res) => {
-  res.json({ available: passwordResetAvailable() });
-});
-
-app.post('/api/auth/forgot', async (req, res) => {
-  const generic = {
-    success: true,
-    message: 'Si ese email está habilitado, te mandamos un enlace para cambiar la contraseña. Revisá también la carpeta de spam.',
-  };
-  if (!passwordResetAvailable()) {
-    return res.status(503).json({ success: false, error: 'La recuperación por email no está configurada. Pedile la contraseña a quien administra la agenda.' });
-  }
-  const ip = clientIp(req);
-  const now = Date.now();
-  const row = forgotRequests.get(ip);
-  if (row && now < row.resetAt && row.count >= 3) {
-    return res.status(429).json({ success: false, error: 'Ya pediste varios enlaces. Esperá unos minutos y revisá tu email.' });
-  }
-  if (!row || now >= row.resetAt) forgotRequests.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
-  else row.count += 1;
-
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  // Solo se manda a emails de la lista; la respuesta es la misma para no revelar cuáles existen.
-  if (email.includes('@') && allowedEmailList().includes(email)) {
-    try {
-      const token = await signResetToken(email);
-      await sendResetEmail(email, `${appBaseUrl()}/?reset=${encodeURIComponent(token)}`);
-    } catch (err) {
-      console.error('No se pudo enviar el mail de recuperación:', err);
-      return res.status(502).json({ success: false, error: 'No se pudo enviar el email. Probá de nuevo en unos minutos.' });
-    }
-  }
-  return res.json(generic);
-});
-
-app.post('/api/auth/reset', async (req, res) => {
-  if (!passwordResetAvailable()) {
-    return res.status(503).json({ success: false, error: 'La recuperación por email no está configurada.' });
-  }
-  const data = await readResetToken(String(req.body?.token || ''));
-  if (!data) {
-    return res.status(400).json({ success: false, error: 'El enlace venció o ya se usó. Pedí uno nuevo desde «¿Olvidaste tu contraseña?».' });
-  }
-  const newPassword = String(req.body?.newPassword || '').trim();
-  if (newPassword.length < 12) {
-    return res.status(400).json({ success: false, error: 'La nueva contraseña debe tener al menos 12 caracteres.' });
-  }
-  const passwordHash = hashPassword(newPassword);
-  const updatedAt = new Date().toISOString();
-  try {
-    await db
-      .insert(schema.authSettings)
-      .values({ id: AUTH_SETTINGS_ID, passwordHash, updatedAt })
-      .onConflictDoUpdate({ target: schema.authSettings.id, set: { passwordHash, updatedAt } });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: publicError('No se pudo guardar la nueva contraseña.', err) });
-  }
-  loginAttempts.clear();
-  return res.json({ success: true, email: data.email });
-});
-
 app.post('/api/auth/logout', (_req, res) => {
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
   res.json({ success: true });
@@ -633,11 +407,6 @@ async function ensureTablesExist() {
         notes TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );`,
-      sql`CREATE TABLE IF NOT EXISTS auth_settings (
-        id VARCHAR(255) PRIMARY KEY,
-        password_hash TEXT NOT NULL,
-        updated_at VARCHAR(50) NOT NULL
-      );`
     ];
 
     for (const stmt of tableStatements) {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, KeyRound, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -7,7 +8,6 @@ interface ChangePasswordModalProps {
 }
 
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen, onClose }) => {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,6 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   if (!isOpen) return null;
 
   const reset = () => {
-    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setError(null);
@@ -45,25 +44,15 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
 
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json().catch(() => ({}));
-      setLoading(false);
-      if (!res.ok) {
-        setError(data.error || 'No se pudo cambiar la contraseña.');
-        return;
-      }
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
       setSuccess(true);
-      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cambiar la contraseña.');
+    } finally {
       setLoading(false);
-      setError('No se pudo conectar con el servidor. Probá de nuevo.');
     }
   };
 
@@ -98,7 +87,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
           {success ? (
             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-2.5 text-emerald-800 text-xs leading-relaxed">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-              <p>Contraseña actualizada. La próxima vez que entren, usen la nueva contraseña.</p>
+              <p>Contraseña actualizada para tu cuenta personal.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -108,18 +97,6 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
                   <span>{error}</span>
                 </div>
               )}
-
-              <div className="space-y-1.5 text-left">
-                <label className="text-xs font-semibold text-slate-700">Contraseña actual</label>
-                <input
-                  type="password"
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2E7D5E] focus:border-transparent transition-all"
-                />
-              </div>
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold text-slate-700">Nueva contraseña</label>
@@ -164,7 +141,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
 
               <div className="pt-1 flex items-start gap-2 text-[11px] text-slate-400 font-medium">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                <span>Una vez cambiada, solo quienes conozcan la nueva contraseña van a poder entrar.</span>
+                <span>Solo cambia la contraseña de tu cuenta personal.</span>
               </div>
             </form>
           )}

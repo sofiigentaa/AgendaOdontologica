@@ -23,9 +23,6 @@ services:
       # Cadena del POOLER de Supabase (Connect → Session pooler).
       - key: DATABASE_URL
         sync: false
-      # Contraseña del consultorio (mínimo 12 caracteres).
-      - key: CONSULTORIO_PASSWORD
-        sync: false
       # Solo en la copia de demostración: "true" entra sin pantalla de ingreso.
       # En la agenda real del consultorio NO cargarla (o dejarla en "false").
       - key: DEMO_MODE
@@ -39,12 +36,10 @@ services:
       # Token para el volcado completo /api/db/all (no se usa en la pantalla).
       - key: ADMIN_API_TOKEN
         generateValue: true
-      # Opcional: "¿Olvidaste tu contraseña?" por email (Brevo, plan gratis).
-      # Necesita también CONSULTORIO_EMAIL con los emails habilitados.
-      - key: BREVO_API_KEY
+      # Supabase Auth y validación de sesiones de usuario.
+      - key: VITE_SUPABASE_URL
         sync: false
-      # Email remitente verificado en Brevo (Senders).
-      - key: MAIL_FROM
+      - key: VITE_SUPABASE_ANON_KEY
         sync: false
       # Opcional: asistente con IA.
       - key: GEMINI_API_KEY

@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Lock, Mail, KeyRound, AlertCircle, Shield, CheckCircle2, UserCheck } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { createBackendSession } from '../utils/authSession';
 
 interface AuthModalProps {
   onLoginSuccess: (userEmail: string) => void;
@@ -12,15 +14,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'forgot' | 'register'>('login');
-  const [resetAvailable, setResetAvailable] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/auth/reset-available')
-      .then((r) => r.json())
-      .then((d) => setResetAvailable(Boolean(d?.available)))
-      .catch(() => setResetAvailable(false));
-  }, []);
 
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,16 +22,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
     setInfo(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/forgot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      if (!isSupabaseConfigured) throw new Error('La autenticación todavía no está configurada.');
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: window.location.origin,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || 'No se pudo enviar el email.');
-      else setInfo(data.message || 'Te mandamos un enlace a tu email.');
-    } catch {
-      setError('No se pudo conectar con el servidor. Probá de nuevo.');
+      if (resetError) throw resetError;
+      setInfo('Si el email pertenece a una cuenta habilitada, vas a recibir un enlace para cambiar tu contraseña.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setError(
+        /email rate limit exceeded/i.test(message)
+          ? 'Supabase alcanzó su límite de envío de emails. Con el proveedor integrado permite hasta 2 por hora. Esperá a que se restablezca o configurá un SMTP propio en Supabase → Authentication → SMTP Settings.'
+          : message || 'No se pudo enviar el email.'
+      );
     } finally {
       setLoading(false);
     }
@@ -55,16 +52,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
     setInfo(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/register', {
+      if (!isSupabaseConfigured) throw new Error('La autenticación todavía no está configurada.');
+      const cleanEmail = email.trim().toLowerCase();
+      const checkResponse = await fetch('/api/auth/registration-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase(), password }),
+        body: JSON.stringify({ email: cleanEmail }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data.error || 'No se pudo completar el registro.');
-      else setInfo(data.message || 'Registro guardado. Ya podés ingresar con la nueva contraseña.');
-    } catch {
-      setError('No se pudo conectar con el servidor. Probá de nuevo.');
+      const checkData = await checkResponse.json().catch(() => ({}));
+      if (!checkResponse.ok) throw new Error(checkData.error || 'No se pudo autorizar el registro.');
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: { name: name.trim() },
+          emailRedirectTo: window.location.origin,
+        },
+      });
+      if (signUpError) throw signUpError;
+      if (data.session?.access_token) {
+        try {
+          const userEmail = await createBackendSession(data.session.access_token);
+          onLoginSuccess(userEmail);
+        } catch (err) {
+          await supabase.auth.signOut();
+          throw err;
+        }
+      } else {
+        setInfo('Te enviamos un enlace de confirmación. Confirmá tu email para ingresar a la agenda.');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo completar el registro.');
     } finally {
       setLoading(false);
     }
@@ -76,28 +95,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
     setLoading(true);
 
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = password.trim();
-
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email: cleanEmail, password: cleanPass }),
+      if (!isSupabaseConfigured) throw new Error('La autenticación todavía no está configurada.');
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setLoading(false);
-        setError(data.error || 'Email o contraseña incorrectos');
-        return;
+      if (signInError) throw signInError;
+      if (!data.session?.access_token) throw new Error('Confirmá tu email antes de ingresar.');
+      try {
+        const userEmail = await createBackendSession(data.session.access_token);
+        onLoginSuccess(userEmail);
+      } catch (err) {
+        await supabase.auth.signOut();
+        throw err;
       }
-      localStorage.setItem('auth_session_token', 'active');
-      localStorage.setItem('auth_user_email', data.email || cleanEmail);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor. Probá de nuevo.');
+    } finally {
       setLoading(false);
-      onLoginSuccess(data.email || cleanEmail);
-    } catch {
-      setLoading(false);
-      setError('No se pudo conectar con el servidor. Probá de nuevo.');
     }
   };
 
@@ -121,6 +137,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
                 : 'Acceso exclusivo para el equipo del consultorio'}
           </p>
         </div>
+
+        {!isSupabaseConfigured && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs">
+            Falta configurar Supabase Auth para habilitar las cuentas individuales.
+          </div>
+        )}
 
         {/* Error notification */}
         {error && (
@@ -156,7 +178,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
             </div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !isSupabaseConfigured}
               className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer disabled:opacity-50"
             >
               {loading ? 'Enviando...' : 'Enviarme el enlace'}
@@ -223,7 +245,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
           <button
             type="submit"
             data-testid="register-submit"
-            disabled={loading}
+            disabled={loading || !isSupabaseConfigured}
             className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
           >
             {loading ? (
@@ -232,7 +254,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
                 Registrando...
               </span>
             ) : (
-              <span>Registrar odontólogo</span>
+              <span>Enviar verificación</span>
             )}
           </button>
           <button
@@ -280,7 +302,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
           <button
             type="submit"
             data-testid="auth-submit"
-            disabled={loading}
+            disabled={loading || !isSupabaseConfigured}
             className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
           >
             {loading ? (

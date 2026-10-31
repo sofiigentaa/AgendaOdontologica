@@ -67,7 +67,8 @@ import {
   isSameReminderRecord,
 } from './utils/listMerge';
 import { User } from 'firebase/auth';
-import { supabase } from './supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { BackendSessionError, createBackendSession } from './utils/authSession';
 import { 
   fetchFromSupabase, 
   syncToSupabase, 
@@ -263,21 +264,65 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [isDemo, setIsDemo] = useState<boolean>(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(false);
 
   React.useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.authenticated) {
+    let active = true;
+    const checkSession = async () => {
+      try {
+        if (isSupabaseConfigured) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            try {
+              await createBackendSession(session.access_token);
+            } catch (error) {
+              console.error('No se pudo validar la sesión de la agenda:', error);
+              if (error instanceof BackendSessionError && (error.status === 401 || error.status === 403)) {
+                await supabase.auth.signOut();
+              }
+            }
+          }
+        }
+
+        const response = await fetch('/api/auth/me', { credentials: 'include' });
+        const data = await response.json();
+        if (!active) return;
+        if (data?.authenticated) {
           setIsAuthenticated(true);
-          setIsDemo(Boolean(d?.demo));
+          setIsDemo(Boolean(data?.demo));
         } else {
-          localStorage.removeItem('auth_session_token');
           setIsAuthenticated(false);
         }
-      })
-      .catch(() => setIsAuthenticated(false))
-      .finally(() => setAuthChecked(true));
+      } catch (error) {
+        console.error('No se pudo comprobar la sesión:', error);
+        if (active) setIsAuthenticated(false);
+      } finally {
+        if (active) setAuthChecked(true);
+      }
+    };
+
+    void checkSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+      }
+      if (event === 'TOKEN_REFRESHED' && session?.access_token) {
+        const accessToken = session.access_token;
+        window.setTimeout(() => {
+          void createBackendSession(accessToken).catch((error) => {
+            console.error('No se pudo renovar la sesión de la agenda:', error);
+            if (error instanceof BackendSessionError && (error.status === 401 || error.status === 403)) {
+              void supabase.auth.signOut();
+            }
+          });
+        }, 0);
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Check if this is a patient accessing a 1-click confirmation / cancellation link
@@ -1271,9 +1316,9 @@ export default function App() {
     );
   }
 
-  const resetToken = urlParams?.get('reset');
-  if (resetToken) {
-    return <ResetPasswordView token={resetToken} />;
+  const recoveryFromUrl = urlParams?.has('reset') || window.location.hash.includes('type=recovery');
+  if (isPasswordRecovery || recoveryFromUrl) {
+    return <ResetPasswordView />;
   }
 
   if (!isAuthenticated) {
@@ -1332,6 +1377,9 @@ export default function App() {
         onLogout={() => {
           localStorage.removeItem('auth_session_token');
           localStorage.removeItem('auth_user_email');
+          void supabase.auth.signOut().catch((error) => {
+            console.error('No se pudo cerrar la sesión de Supabase:', error);
+          });
           fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
           if (isDemo) {
             // En la demo no hay pantalla de ingreso: al salir vuelve a entrar sola.

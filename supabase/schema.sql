@@ -24,12 +24,6 @@ CREATE TABLE IF NOT EXISTS "appointments" (
 	"porcentaje_honorario" double precision DEFAULT 50
 );
 
-CREATE TABLE IF NOT EXISTS "auth_settings" (
-	"id" text PRIMARY KEY NOT NULL,
-	"password_hash" text NOT NULL,
-	"updated_at" text NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS "call_reminders" (
 	"id" text PRIMARY KEY NOT NULL,
 	"contact_id" text NOT NULL,
@@ -98,7 +92,6 @@ ALTER TABLE "contact_notes" ADD CONSTRAINT "contact_notes_contact_id_contacts_id
 
 -- Seguridad: RLS activado y sin políticas; sin permisos para anon/authenticated.
 ALTER TABLE "appointments" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "auth_settings" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "call_reminders" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "contact_attachments" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "contact_notes" ENABLE ROW LEVEL SECURITY;
