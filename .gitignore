@@ -17,6 +17,11 @@ coverage/
 # Keep only the template
 !.env.example
 
+# Credenciales de Render/Supabase y salida del aprovisionamiento
+.provision.env
+ops/salida/
+ops/vendor/
+
 # Local test cases & private notes
 test_cases.txt
 playwright-report/
