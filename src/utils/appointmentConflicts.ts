@@ -39,6 +39,36 @@ export function isAppointmentBlockingCalendar(appt: Appointment): boolean {
   return true;
 }
 
+function minutesToTime(total: number): string {
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Horarios de inicio libres para una odontóloga en un día, según los turnos ya cargados.
+ * Recorre el rango de consulta en pasos de `stepMinutes`.
+ */
+export function getAvailableStartTimes(
+  appointments: Appointment[],
+  candidate: { date: string; dentist?: string; durationMinutes?: number },
+  options: { from?: string; to?: string; stepMinutes?: number } = {}
+): string[] {
+  const from = timeToMinutes(options.from ?? '07:00');
+  const to = timeToMinutes(options.to ?? '21:30');
+  const step = options.stepMinutes ?? 15;
+  const available: string[] = [];
+  for (let start = from; start <= to; start += step) {
+    const time = minutesToTime(start);
+    const conflict = findConflictingAppointment(appointments, {
+      date: candidate.date,
+      time,
+      durationMinutes: candidate.durationMinutes,
+      dentist: candidate.dentist,
+    });
+    if (!conflict) available.push(time);
+  }
+  return available;
+}
+
 export function findConflictingAppointment(
   appointments: Appointment[],
   candidate: {

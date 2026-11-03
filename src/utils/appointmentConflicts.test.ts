@@ -4,6 +4,7 @@ import {
   checkTimeOverlap,
   dentistsConflict,
   findConflictingAppointment,
+  getAvailableStartTimes,
 } from './appointmentConflicts';
 
 function appt(overrides: Partial<Appointment>): Appointment {
@@ -94,5 +95,40 @@ describe('findConflictingAppointment', () => {
         dentist: 'Marie',
       })
     ).toBeUndefined();
+  });
+});
+
+describe('getAvailableStartTimes', () => {
+  it('excludes the starts that overlap the dentist turns and keeps the rest', () => {
+    const existing = [appt({ id: 'marie-0900', time: '09:00', durationMinutes: 45 })];
+    const free = getAvailableStartTimes(
+      existing,
+      { date: '2026-09-09', dentist: 'Marie', durationMinutes: 30 },
+      { from: '08:30', to: '10:00' }
+    );
+    expect(free).toEqual(['08:30', '09:45', '10:00']);
+  });
+
+  it('does not block for the other dentist or for cancelled turns', () => {
+    const existing = [
+      appt({ id: 'yani', dentist: 'Yani', time: '09:00' }),
+      appt({ id: 'cancelled', time: '09:00', whatsappStatus: 'cancelled' }),
+    ];
+    const free = getAvailableStartTimes(
+      existing,
+      { date: '2026-09-09', dentist: 'Marie', durationMinutes: 30 },
+      { from: '09:00', to: '09:00' }
+    );
+    expect(free).toEqual(['09:00']);
+  });
+
+  it('returns no starts when the dentist is fully booked', () => {
+    const existing = [appt({ id: 'full', time: '09:00', durationMinutes: 60 })];
+    const free = getAvailableStartTimes(
+      existing,
+      { date: '2026-09-09', dentist: 'Marie', durationMinutes: 30 },
+      { from: '09:00', to: '09:30' }
+    );
+    expect(free).toEqual([]);
   });
 });

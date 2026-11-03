@@ -80,6 +80,7 @@ import {
   deleteContactRemote,
   fetchContactsFresh,
   upsertAppointment,
+  saveAppointmentRemote,
   deleteAppointmentRemote,
   fetchAppointmentsFresh,
 } from './utils/backendSync';
@@ -699,20 +700,19 @@ export default function App() {
     saveStoredAppointments(newAppts);
   };
 
-  const handleUpdateAppointmentStatus = (
+  const handleUpdateAppointmentStatus = async (
     appointmentId: string,
     status: 'pending' | 'confirmed' | 'cancelled'
-  ) => {
-    let updatedAppt: Appointment | null = null;
-    const updated = appointments.map((a) => {
-      if (a.id === appointmentId) {
-        updatedAppt = { ...a, whatsappStatus: status, whatsappLastReply: new Date().toISOString() };
-        return updatedAppt;
-      }
-      return a;
-    });
-    updateAppointments(updated);
-    if (updatedAppt) upsertAppointment(updatedAppt);
+  ): Promise<string | null> => {
+    const existing = appointments.find((a) => a.id === appointmentId);
+    if (!existing) return 'El turno ya no existe en la agenda.';
+    const updatedAppt: Appointment = { ...existing, whatsappStatus: status, whatsappLastReply: new Date().toISOString() };
+    const result = await saveAppointmentRemote(updatedAppt);
+    if (!result.ok) {
+      showToast(`⚠️ ${result.error}`);
+      return result.error;
+    }
+    updateAppointments(appointments.map((a) => (a.id === appointmentId ? updatedAppt : a)));
     if (status === 'confirmed') {
       showToast('✔ Turno marcado como Confirmado.');
     } else if (status === 'cancelled') {
@@ -720,6 +720,7 @@ export default function App() {
     } else {
       showToast('⏳ Estado del turno actualizado a pendiente.');
     }
+    return null;
   };
 
   const updateInsuranceFiles = (newFiles: InsuranceFolderFile[]) => {
@@ -787,7 +788,8 @@ export default function App() {
   };
 
   // Appointment Handlers
-  const handleSaveAppointment = (
+  // Devuelve el motivo del rechazo (p. ej. solapamiento) o null si el servidor guardó el turno.
+  const handleSaveAppointment = async (
     data: {
       contactId: string;
       date: string;
@@ -805,26 +807,26 @@ export default function App() {
       appointmentId?: string;
     },
     appointmentId?: string
-  ) => {
+  ): Promise<string | null> => {
     const targetId = data.appointmentId || appointmentId;
+    const appt: Appointment = targetId
+      ? ({ ...appointments.find((a) => a.id === targetId), ...data, id: targetId } as Appointment)
+      : {
+          id: `appt-${Date.now()}`,
+          dentist: (data.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Marie',
+          ...data,
+          createdAt: new Date().toISOString(),
+        };
+    const result = await saveAppointmentRemote(appt);
+    if (!result.ok) return result.error;
     if (targetId) {
-      const existing = appointments.find((a) => a.id === targetId);
-      const updatedAppt = { ...existing, ...data, id: targetId } as Appointment;
-      const updated = appointments.map((a) => (a.id === targetId ? updatedAppt : a));
-      updateAppointments(updated);
-      upsertAppointment(updatedAppt);
+      updateAppointments(appointments.map((a) => (a.id === targetId ? appt : a)));
       showToast('Turno actualizado en el calendario');
     } else {
-      const newAppt: Appointment = {
-        id: `appt-${Date.now()}`,
-        dentist: (data.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Marie',
-        ...data,
-        createdAt: new Date().toISOString(),
-      };
-      updateAppointments([newAppt, ...appointments]);
-      upsertAppointment(newAppt);
+      updateAppointments([appt, ...appointments]);
       showToast('Nuevo turno agendado en el calendario');
     }
+    return null;
   };
 
   const handleToggleAppointmentComplete = (appointmentId: string) => {
