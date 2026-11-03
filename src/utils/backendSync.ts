@@ -201,6 +201,33 @@ export async function upsertAppointment(appointment: Appointment): Promise<boole
   }
 }
 
+export interface SaveAppointmentResult {
+  ok: boolean;
+  conflict: boolean;
+  error: string;
+}
+
+// A diferencia de upsertAppointment, informa el rechazo del servidor (p. ej. 409 por solapamiento).
+export async function saveAppointmentRemote(appointment: Appointment): Promise<SaveAppointmentResult> {
+  try {
+    const res = await fetch('/api/appointments', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appointment),
+    });
+    if (res.ok) return { ok: true, conflict: false, error: '' };
+    const data = await res.json().catch(() => ({}));
+    return {
+      ok: false,
+      conflict: res.status === 409,
+      error: data?.error || 'No se pudo guardar el turno. Intentá de nuevo.',
+    };
+  } catch {
+    return { ok: false, conflict: false, error: 'Sin conexión con el servidor. El turno no se guardó.' };
+  }
+}
+
 export async function deleteAppointmentRemote(id: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE', credentials: 'include' });

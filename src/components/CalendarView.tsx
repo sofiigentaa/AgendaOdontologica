@@ -48,7 +48,7 @@ interface CalendarViewProps {
   googleUser?: { email?: string | null; displayName?: string | null } | null;
   onPromptGoogleAction?: (actionType: 'sync_calendar' | 'send_email', apptData: any, patient: Contact) => void;
   onConnectGoogle?: () => void;
-  onUpdateAppointmentStatus?: (appointmentId: string, status: 'pending' | 'confirmed' | 'cancelled') => void;
+  onUpdateAppointmentStatus?: (appointmentId: string, status: 'pending' | 'confirmed' | 'cancelled') => Promise<string | null>;
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
@@ -75,6 +75,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [selectedDentistFilter, setSelectedDentistFilter] = useState<'all' | 'Yani' | 'Marie' | 'Ambas'>('all');
   const [selectedMotiveFilter, setSelectedMotiveFilter] = useState<string>('all');
   const [selectedApptDetail, setSelectedApptDetail] = useState<Appointment | null>(null);
+  const [statusAction, setStatusAction] = useState<{ status: 'confirmed' | 'cancelled'; saving: boolean; error: string | null } | null>(null);
+  useEffect(() => {
+    setStatusAction(null);
+  }, [selectedApptDetail?.id]);
   const [selectedDayModalDate, setSelectedDayModalDate] = useState<string | null>(null);
   const [pickedJumpDate, setPickedJumpDate] = useState<string>('');
   const [confirmingDeleteCancelled, setConfirmingDeleteCancelled] = useState(false);
@@ -1866,13 +1870,21 @@ ${cancelUrl}
                           {selectedApptDetail.whatsappStatus !== 'confirmed' && (
                             <button
                               type="button"
-                              onClick={() => {
-                                if (onUpdateAppointmentStatus) {
-                                  onUpdateAppointmentStatus(selectedApptDetail.id, 'confirmed');
+                              disabled={statusAction?.saving}
+                              onClick={async () => {
+                                const apptId = selectedApptDetail.id;
+                                setStatusAction({ status: 'confirmed', saving: true, error: null });
+                                const error = onUpdateAppointmentStatus
+                                  ? await onUpdateAppointmentStatus(apptId, 'confirmed')
+                                  : null;
+                                if (error) {
+                                  setStatusAction({ status: 'confirmed', saving: false, error });
+                                  return;
                                 }
+                                setStatusAction(null);
                                 setSelectedApptDetail((prev: any) => ({ ...prev, whatsappStatus: 'confirmed' }));
                               }}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-wait"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>Marcar como Confirmado</span>
@@ -1882,19 +1894,33 @@ ${cancelUrl}
                           {selectedApptDetail.whatsappStatus !== 'cancelled' && (
                             <button
                               type="button"
-                              onClick={() => {
-                                if (onUpdateAppointmentStatus) {
-                                  onUpdateAppointmentStatus(selectedApptDetail.id, 'cancelled');
+                              disabled={statusAction?.saving}
+                              onClick={async () => {
+                                const apptId = selectedApptDetail.id;
+                                setStatusAction({ status: 'cancelled', saving: true, error: null });
+                                const error = onUpdateAppointmentStatus
+                                  ? await onUpdateAppointmentStatus(apptId, 'cancelled')
+                                  : null;
+                                if (error) {
+                                  setStatusAction({ status: 'cancelled', saving: false, error });
+                                  return;
                                 }
+                                setStatusAction(null);
                                 setSelectedApptDetail((prev: any) => ({ ...prev, whatsappStatus: 'cancelled' }));
                               }}
-                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-wait"
                             >
                               <AlertCircle className="w-3.5 h-3.5" />
-                              <span>Marcar como Cancelado</span>
+                              <span>{statusAction?.saving && statusAction.status === 'cancelled' ? 'Guardando...' : 'Marcar como Cancelado'}</span>
                             </button>
                           )}
                         </div>
+
+                        {statusAction?.error && (
+                          <p role="alert" className="text-[11px] font-semibold text-rose-700">
+                            {statusAction.error}
+                          </p>
+                        )}
 
                         {selectedApptDetail.whatsappLastReply && (
                           <p className="text-[11px] text-slate-500 italic">
