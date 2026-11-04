@@ -58,12 +58,14 @@ La demo pública puede entrar automáticamente cuando `DEMO_MODE=true`.
 2. Pulsar **+ Turno** en el día (o **Agendar**)
 3. Elegir paciente
 4. Elegir odontóloga (Marie / Yani / Ambas)
-5. Fecha y horario 24 hs
+5. Fecha y horario 24 hs. El modal muestra los **horarios libres** de la odontóloga para ese día y la duración elegida (los consulta al servidor)
 6. Motivo (puede usarse un preset: Consulta, Limpieza, etc.)
 7. Pulsar **Agendar Turno**
-8. Si el horario está ocupado: cambiar hora o **Agendar de todos modos**
+8. Si el horario ya está ocupado, el servidor rechaza el turno: el modal muestra el motivo, queda abierto y se actualizan los horarios libres. Elegir otro horario. No existe la opción de agendar superpuesto.
 
-**Resultado:** el turno aparece en el calendario y en la lista.
+**Resultado:** el turno aparece en el calendario y en la lista. Un turno no puede superponerse con otro de la misma odontóloga (ni con "Ambas"). Marie y Yani sí pueden atender a la misma hora.
+
+**Reglas de horario:** los turnos empiezan entre 07:00 y 21:30 y terminan como máximo a las 22:00. En el día de hoy no se ofrecen horarios que ya pasaron.
 
 ---
 

@@ -15,7 +15,8 @@ import {
 import { Appointment, Contact } from '../types';
 import { TREATMENT_PRESETS } from '../constants/treatments';
 import { formatDuration, getTodayISO, formatDateDDMMYYYY } from '../utils/time';
-import { findConflictingAppointment, getAvailableStartTimes } from '../utils/appointmentConflicts';
+import { findConflictingAppointment } from '../utils/appointmentConflicts';
+import { fetchAvailability } from '../utils/backendSync';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { CustomTimePicker } from './CustomTimePicker';
 
@@ -102,6 +103,30 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<{ slots: string[]; loading: boolean; error: string }>({
+    slots: [],
+    loading: false,
+    error: '',
+  });
+  const [availabilityVersion, setAvailabilityVersion] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen || !date) return;
+    let cancelled = false;
+    setAvailability((prev) => ({ ...prev, loading: true, error: '' }));
+    fetchAvailability({
+      date,
+      dentist,
+      durationMinutes: Number(durationMinutes) || 30,
+      excludeId: editingAppointment?.id,
+    }).then((result) => {
+      if (cancelled) return;
+      setAvailability({ slots: result.slots, loading: false, error: result.error });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, date, dentist, durationMinutes, editingAppointment?.id, availabilityVersion]);
 
   const prevIsOpenRef = React.useRef(isOpen);
   const prevContactsLengthRef = React.useRef(contacts.length);
@@ -169,12 +194,6 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
   const quickTimePresets = ['08:30', '09:00', '10:00', '11:30', '14:00', '15:00', '16:30', '17:30'];
 
-  const availableStartTimes = date
-    ? getAvailableStartTimes(
-        appointments.filter((a) => a.id !== editingAppointment?.id),
-        { date, dentist, durationMinutes: Number(durationMinutes) || 30 }
-      )
-    : [];
   const dentistLabel = dentist === 'Ambas' ? 'ambas odontólogas' : dentist === 'Yani' ? 'Dra. Yani' : 'Dra. Marie';
 
   const processSave = async () => {
@@ -202,6 +221,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
     setIsSaving(false);
     if (error) {
       setSaveError(error);
+      setAvailabilityVersion((v) => v + 1);
       return;
     }
     setConflictAppointment(null);
@@ -562,15 +582,21 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
             {date && (
               <div className="space-y-1" data-testid="appt-availability">
                 <span className="text-[11px] font-semibold text-slate-500">
-                  Horarios libres para {dentistLabel} (07:00 a 21:30):
+                  Horarios libres para {dentistLabel}:
                 </span>
-                {availableStartTimes.length === 0 ? (
+                {availability.loading ? (
+                  <p className="text-[11px] font-semibold text-slate-500">Consultando horarios...</p>
+                ) : availability.error ? (
+                  <p role="alert" className="text-[11px] font-semibold text-rose-700">
+                    {availability.error}
+                  </p>
+                ) : availability.slots.length === 0 ? (
                   <p className="text-[11px] font-semibold text-amber-700">
                     No hay horarios libres ese día con esta selección.
                   </p>
                 ) : (
                   <div className="flex items-center gap-1 overflow-x-auto py-0.5">
-                    {availableStartTimes.map((t) => (
+                    {availability.slots.map((t) => (
                       <button
                         key={t}
                         type="button"

@@ -228,6 +228,35 @@ export async function saveAppointmentRemote(appointment: Appointment): Promise<S
   }
 }
 
+export interface AvailabilityResult {
+  slots: string[];
+  error: string;
+}
+
+export async function fetchAvailability(params: {
+  date: string;
+  dentist: string;
+  durationMinutes: number;
+  excludeId?: string;
+}): Promise<AvailabilityResult> {
+  try {
+    const query = new URLSearchParams({
+      date: params.date,
+      dentist: params.dentist,
+      durationMinutes: String(params.durationMinutes),
+    });
+    if (params.excludeId) query.set('excludeId', params.excludeId);
+    const res = await fetch(`/api/availability?${query.toString()}`, { credentials: 'include' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { slots: [], error: data?.error || 'No se pudo consultar la disponibilidad.' };
+    }
+    return { slots: Array.isArray(data?.slots) ? data.slots : [], error: '' };
+  } catch {
+    return { slots: [], error: 'Sin conexión con el servidor. No se pudo consultar la disponibilidad.' };
+  }
+}
+
 export async function deleteAppointmentRemote(id: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE', credentials: 'include' });
