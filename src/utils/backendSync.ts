@@ -201,6 +201,62 @@ export async function upsertAppointment(appointment: Appointment): Promise<boole
   }
 }
 
+export interface SaveAppointmentResult {
+  ok: boolean;
+  conflict: boolean;
+  error: string;
+}
+
+// A diferencia de upsertAppointment, informa el rechazo del servidor (p. ej. 409 por solapamiento).
+export async function saveAppointmentRemote(appointment: Appointment): Promise<SaveAppointmentResult> {
+  try {
+    const res = await fetch('/api/appointments', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appointment),
+    });
+    if (res.ok) return { ok: true, conflict: false, error: '' };
+    const data = await res.json().catch(() => ({}));
+    return {
+      ok: false,
+      conflict: res.status === 409,
+      error: data?.error || 'No se pudo guardar el turno. Intentá de nuevo.',
+    };
+  } catch {
+    return { ok: false, conflict: false, error: 'Sin conexión con el servidor. El turno no se guardó.' };
+  }
+}
+
+export interface AvailabilityResult {
+  slots: string[];
+  error: string;
+}
+
+export async function fetchAvailability(params: {
+  date: string;
+  dentist: string;
+  durationMinutes: number;
+  excludeId?: string;
+}): Promise<AvailabilityResult> {
+  try {
+    const query = new URLSearchParams({
+      date: params.date,
+      dentist: params.dentist,
+      durationMinutes: String(params.durationMinutes),
+    });
+    if (params.excludeId) query.set('excludeId', params.excludeId);
+    const res = await fetch(`/api/availability?${query.toString()}`, { credentials: 'include' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { slots: [], error: data?.error || 'No se pudo consultar la disponibilidad.' };
+    }
+    return { slots: Array.isArray(data?.slots) ? data.slots : [], error: '' };
+  } catch {
+    return { slots: [], error: 'Sin conexión con el servidor. No se pudo consultar la disponibilidad.' };
+  }
+}
+
 export async function deleteAppointmentRemote(id: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE', credentials: 'include' });

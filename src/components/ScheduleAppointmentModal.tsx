@@ -16,6 +16,7 @@ import { Appointment, Contact } from '../types';
 import { TREATMENT_PRESETS } from '../constants/treatments';
 import { formatDuration, getTodayISO, formatDateDDMMYYYY } from '../utils/time';
 import { findConflictingAppointment } from '../utils/appointmentConflicts';
+import { fetchAvailability } from '../utils/backendSync';
 import { PatientSearchSelect } from './PatientSearchSelect';
 import { CustomTimePicker } from './CustomTimePicker';
 
@@ -38,7 +39,7 @@ interface ScheduleAppointmentModalProps {
     materiales?: number;
     mecanicoDental?: number;
     porcentajeHonorario?: number;
-  }, appointmentId?: string) => void;
+  }, appointmentId?: string) => Promise<string | null>;
   onOpenAddContactModal: () => void;
   initialContactId?: string;
   initialDate?: string;
@@ -100,6 +101,32 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
     dentistName: string;
     timeRangeText: string;
   } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<{ slots: string[]; loading: boolean; error: string }>({
+    slots: [],
+    loading: false,
+    error: '',
+  });
+  const [availabilityVersion, setAvailabilityVersion] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen || !date) return;
+    let cancelled = false;
+    setAvailability((prev) => ({ ...prev, loading: true, error: '' }));
+    fetchAvailability({
+      date,
+      dentist,
+      durationMinutes: Number(durationMinutes) || 30,
+      excludeId: editingAppointment?.id,
+    }).then((result) => {
+      if (cancelled) return;
+      setAvailability({ slots: result.slots, loading: false, error: result.error });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, date, dentist, durationMinutes, editingAppointment?.id, availabilityVersion]);
 
   const prevIsOpenRef = React.useRef(isOpen);
   const prevContactsLengthRef = React.useRef(contacts.length);
@@ -108,6 +135,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
     // When modal transitions from closed to open
     if (isOpen && !prevIsOpenRef.current) {
       setConflictAppointment(null);
+      setSaveError(null);
       if (editingAppointment) {
         setSelectedContactId(editingAppointment.contactId);
         setDate(editingAppointment.date);
@@ -166,7 +194,10 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
   const quickTimePresets = ['08:30', '09:00', '10:00', '11:30', '14:00', '15:00', '16:30', '17:30'];
 
-  const processSave = () => {
+  const dentistLabel = dentist === 'Ambas' ? 'ambas odontólogas' : dentist === 'Yani' ? 'Dra. Yani' : 'Dra. Marie';
+
+  const processSave = async () => {
+    if (isSaving) return;
     const apptPayload = {
       contactId: selectedContactId,
       date,
@@ -184,7 +215,15 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
       appointmentId: editingAppointment ? editingAppointment.id : undefined,
     };
 
-    onSaveAppointment(apptPayload, editingAppointment ? editingAppointment.id : undefined);
+    setIsSaving(true);
+    setSaveError(null);
+    const error = await onSaveAppointment(apptPayload, editingAppointment ? editingAppointment.id : undefined);
+    setIsSaving(false);
+    if (error) {
+      setSaveError(error);
+      setAvailabilityVersion((v) => v + 1);
+      return;
+    }
     setConflictAppointment(null);
     onClose();
 
@@ -539,6 +578,42 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                 ))}
               </div>
             </div>
+
+            {date && (
+              <div className="space-y-1" data-testid="appt-availability">
+                <span className="text-[11px] font-semibold text-slate-500">
+                  Horarios libres para {dentistLabel}:
+                </span>
+                {availability.loading ? (
+                  <p className="text-[11px] font-semibold text-slate-500">Consultando horarios...</p>
+                ) : availability.error ? (
+                  <p role="alert" className="text-[11px] font-semibold text-rose-700">
+                    {availability.error}
+                  </p>
+                ) : availability.slots.length === 0 ? (
+                  <p className="text-[11px] font-semibold text-amber-700">
+                    No hay horarios libres ese día con esta selección.
+                  </p>
+                ) : (
+                  <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+                    {availability.slots.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTime(t)}
+                        className={`shrink-0 px-2 py-0.5 text-[11px] rounded font-semibold transition-all ${
+                          time === t
+                            ? 'bg-[#2E7D5E] text-white font-bold'
+                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Treatment Motive & Duration */}
@@ -820,21 +895,31 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
           </div>
 
           {/* Submit / Buttons */}
+          {saveError && (
+            <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+              <span>{saveError}</span>
+            </div>
+          )}
           <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+              disabled={isSaving}
+              className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
               data-testid="appt-save"
-              className="px-5 py-2.5 bg-[#4CAF7D] hover:bg-[#3d986b] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
+              disabled={isSaving}
+              className="px-5 py-2.5 bg-[#4CAF7D] hover:bg-[#3d986b] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-60 disabled:cursor-wait"
             >
               <CalendarIcon className="w-4 h-4" />
-              <span>{editingAppointment ? 'Guardar Cambios' : 'Agendar Turno'}</span>
+              <span>
+                {isSaving ? 'Guardando...' : editingAppointment ? 'Guardar Cambios' : 'Agendar Turno'}
+              </span>
             </button>
           </div>
 
@@ -897,14 +982,6 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
                 >
                   Modificar horario
-                </button>
-                <button
-                  type="button"
-                  onClick={() => processSave()}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
-                  title="Agendar superponiendo intencionalmente"
-                >
-                  Agendar de todos modos
                 </button>
               </div>
 

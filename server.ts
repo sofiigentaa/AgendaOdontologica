@@ -1,6 +1,14 @@
 import 'dotenv/config';
 import express from 'express';
-import { checkTimeOverlap, dentistsConflict, isAppointmentBlockingCalendar } from './src/utils/appointmentConflicts.ts';
+import {
+  CLINIC_TIME_ZONE,
+  ceilTimeToStep,
+  findConflictingAppointment,
+  findNewScheduleConflict,
+  getAvailableStartTimes,
+  getClinicNow,
+  hasScheduleChanged,
+} from './src/utils/appointmentConflicts.ts';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -681,6 +689,15 @@ app.get('/api/sync/agenda', requireSession, async (req, res) => {
 app.post('/api/sync/agenda', requireSession, (req, res) => {
   try {
     const payload = req.body || {};
+    if (Array.isArray(payload.appointments)) {
+      const clash = findNewScheduleConflict(sharedAgendaStore.appointments || [], payload.appointments);
+      if (clash) {
+        return res.status(409).json({
+          success: false,
+          error: `Ese horario se superpone con otro turno (${clash.conflict.time} hs).`,
+        });
+      }
+    }
     
     if (Array.isArray(payload.insuranceFiles)) {
       // Tratamos el array recibido como la lista completa y autoritativa:
@@ -892,6 +909,88 @@ app.delete('/api/contacts/:id', requireSession, async (req, res) => {
   }
 });
 
+function upsertAppointmentInStore(a: any) {
+  const list = sharedAgendaStore.appointments || [];
+  sharedAgendaStore.appointments = list.some((x: any) => x.id === a.id)
+    ? list.map((x: any) => (x.id === a.id ? a : x))
+    : [a, ...list];
+  sharedAgendaStore.lastUpdated = new Date().toISOString();
+}
+
+function needsConflictCheck(existing: any, a: any) {
+  return !a.completed && a.whatsappStatus !== 'cancelled' && hasScheduleChanged(existing, a);
+}
+
+async function loadAppointmentsForDate(date: string): Promise<any[]> {
+  if (!isDbConfigured) {
+    return (sharedAgendaStore.appointments || []).filter((x: any) => x.date === date);
+  }
+  return db.select().from(schema.appointments).where(eq(schema.appointments.date, date));
+}
+
+// Valida el solapamiento y guarda en la misma transacción. El bloqueo por fecha hace que dos
+// pedidos simultáneos para el mismo día se ejecuten uno detrás del otro.
+async function saveAppointment(a: any): Promise<{ ok: true } | { ok: false; conflict: any }> {
+  if (!isDbConfigured) {
+    const list = sharedAgendaStore.appointments || [];
+    if (needsConflictCheck(list.find((x: any) => x.id === a.id), a)) {
+      const conflict = findConflictingAppointment(list, a);
+      if (conflict) return { ok: false, conflict };
+    }
+    upsertAppointmentInStore(a);
+    return { ok: true };
+  }
+  const outcome = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${a.date}))`);
+    const sameDay: any[] = await tx.select().from(schema.appointments).where(eq(schema.appointments.date, a.date));
+    if (needsConflictCheck(sameDay.find((x: any) => x.id === a.id), a)) {
+      const conflict = findConflictingAppointment(sameDay, a);
+      if (conflict) return { ok: false as const, conflict };
+    }
+    await tx.insert(schema.appointments).values({
+      id: a.id,
+      contactId: a.contactId,
+      date: a.date,
+      time: a.time,
+      durationMinutes: a.durationMinutes ?? 30,
+      motive: a.motive ?? null,
+      dentist: a.dentist ?? null,
+      completed: a.completed ?? false,
+      whatsappStatus: a.whatsappStatus ?? null,
+      whatsappLastReply: a.whatsappLastReply ?? null,
+      createdAt: a.createdAt || new Date().toISOString(),
+      ingresos: a.ingresos ?? 0,
+      descartables: a.descartables ?? 0,
+      estampillas: a.estampillas ?? 0,
+      materiales: a.materiales ?? 0,
+      mecanicoDental: a.mecanicoDental ?? 0,
+      porcentajeHonorario: a.porcentajeHonorario ?? 50,
+    }).onConflictDoUpdate({
+      target: schema.appointments.id,
+      set: {
+        contactId: a.contactId,
+        date: a.date,
+        time: a.time,
+        durationMinutes: a.durationMinutes ?? 30,
+        motive: a.motive ?? null,
+        dentist: a.dentist ?? null,
+        completed: a.completed ?? false,
+        whatsappStatus: a.whatsappStatus ?? null,
+        whatsappLastReply: a.whatsappLastReply ?? null,
+        ingresos: a.ingresos ?? 0,
+        descartables: a.descartables ?? 0,
+        estampillas: a.estampillas ?? 0,
+        materiales: a.materiales ?? 0,
+        mecanicoDental: a.mecanicoDental ?? 0,
+        porcentajeHonorario: a.porcentajeHonorario ?? 50,
+      },
+    });
+    return { ok: true as const };
+  });
+  if (outcome.ok) upsertAppointmentInStore(a);
+  return outcome;
+}
+
 app.get('/api/appointments', requireSession, async (req, res) => {
   if (!isDbConfigured) {
     return res.json({ success: true, appointments: sharedAgendaStore.appointments || [] });
@@ -911,71 +1010,46 @@ app.post('/api/appointments', requireSession, async (req, res) => {
     if (!a.date || !/^\d{4}-\d{2}-\d{2}$/.test(String(a.date)) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(a.time || ''))) {
       return res.status(400).json({ success: false, error: 'Fecha u hora del turno inválida.' });
     }
-    // Control de superposición también en el servidor (dos equipos al mismo tiempo).
-    if (!a.completed && a.whatsappStatus !== 'cancelled') {
-      let sameDay: any[] = (sharedAgendaStore.appointments || []).filter((x: any) => x.date === a.date);
-      if (isDbConfigured) {
-        try {
-          sameDay = await db.select().from(schema.appointments).where(eq(schema.appointments.date, a.date));
-        } catch {
-          // si la base no responde, se usa lo que hay en memoria
-        }
-      }
-      const clash = sameDay.find(
-        (x: any) =>
-          x.id !== a.id &&
-          isAppointmentBlockingCalendar(x) &&
-          dentistsConflict(x.dentist, a.dentist) &&
-          checkTimeOverlap(x.time, x.durationMinutes || 30, a.time, a.durationMinutes || 30)
-      );
-      if (clash) {
-        return res.status(409).json({ success: false, error: `Ese horario se superpone con otro turno (${clash.time} hs).` });
-      }
-    }
-    if (isDbConfigured) {
-      await db.insert(schema.appointments).values({
-        id: a.id,
-        contactId: a.contactId,
-        date: a.date,
-        time: a.time,
-        durationMinutes: a.durationMinutes ?? 30,
-        motive: a.motive ?? null,
-        dentist: a.dentist ?? null,
-        completed: a.completed ?? false,
-        whatsappStatus: a.whatsappStatus ?? null,
-        whatsappLastReply: a.whatsappLastReply ?? null,
-        createdAt: a.createdAt || new Date().toISOString(),
-        ingresos: a.ingresos ?? 0,
-        descartables: a.descartables ?? 0,
-        estampillas: a.estampillas ?? 0,
-        materiales: a.materiales ?? 0,
-        mecanicoDental: a.mecanicoDental ?? 0,
-        porcentajeHonorario: a.porcentajeHonorario ?? 50,
-      }).onConflictDoUpdate({
-        target: schema.appointments.id,
-        set: {
-          contactId: a.contactId,
-          date: a.date,
-          time: a.time,
-          durationMinutes: a.durationMinutes ?? 30,
-          motive: a.motive ?? null,
-          dentist: a.dentist ?? null,
-          completed: a.completed ?? false,
-          whatsappStatus: a.whatsappStatus ?? null,
-          whatsappLastReply: a.whatsappLastReply ?? null,
-          ingresos: a.ingresos ?? 0,
-          descartables: a.descartables ?? 0,
-          estampillas: a.estampillas ?? 0,
-          materiales: a.materiales ?? 0,
-          mecanicoDental: a.mecanicoDental ?? 0,
-          porcentajeHonorario: a.porcentajeHonorario ?? 50,
-        },
-      });
+    const outcome = await saveAppointment(a);
+    if (outcome.ok === false) {
+      return res.status(409).json({ success: false, error: `Ese horario se superpone con otro turno (${outcome.conflict.time} hs).` });
     }
     broadcastToSSEClients({ type: 'APPOINTMENT_UPSERT', appointment: a, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ success: false, error: publicError('No se pudo guardar en la base de datos.', err) });
+  }
+});
+
+// Horarios de inicio libres para una odontóloga en un día. Es la misma regla que valida POST /api/appointments.
+app.get('/api/availability', requireSession, async (req, res) => {
+  const date = String(req.query.date || '');
+  const dentist = String(req.query.dentist || '');
+  const durationMinutes = Number(req.query.durationMinutes ?? 30);
+  const excludeId = req.query.excludeId ? String(req.query.excludeId) : undefined;
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !['Marie', 'Yani', 'Ambas'].includes(dentist) ||
+    !Number.isInteger(durationMinutes) ||
+    durationMinutes < 5 ||
+    durationMinutes > 240
+  ) {
+    return res.status(400).json({ success: false, error: 'Parámetros de disponibilidad inválidos.' });
+  }
+  try {
+    const clinicNow = getClinicNow();
+    let slots: string[] = [];
+    if (date >= clinicNow.date) {
+      const dayAppointments = await loadAppointmentsForDate(date);
+      slots = getAvailableStartTimes(
+        dayAppointments,
+        { date, dentist, durationMinutes, id: excludeId },
+        { minStartTime: date === clinicNow.date ? ceilTimeToStep(clinicNow.time) : undefined }
+      );
+    }
+    res.json({ success: true, date, dentist, durationMinutes, timeZone: CLINIC_TIME_ZONE, slots });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: publicError('No se pudo consultar la disponibilidad.', err) });
   }
 });
 
@@ -985,6 +1059,7 @@ app.delete('/api/appointments/:id', requireSession, async (req, res) => {
     if (isDbConfigured) {
       await db.delete(schema.appointments).where(eq(schema.appointments.id, id));
     }
+    sharedAgendaStore.appointments = (sharedAgendaStore.appointments || []).filter((x: any) => x.id !== id);
     broadcastToSSEClients({ type: 'APPOINTMENT_DELETE', id, timestamp: new Date().toISOString() });
     res.json({ success: true });
   } catch (err: any) {
