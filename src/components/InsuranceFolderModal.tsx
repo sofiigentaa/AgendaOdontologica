@@ -474,7 +474,7 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Título o Descripción del Archivo <span className="text-rose-500">*</span>
                   </label>
-                  <input
+                  <input aria-label="Título o Descripción del Archivo"
                     type="text"
                     value={fileTitle}
                     onChange={(e) => setFileTitle(e.target.value)}
@@ -488,7 +488,7 @@ export const InsuranceFolderModal: React.FC<InsuranceFolderModalProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Notas u Observaciones del Archivo (Opcional)
                   </label>
-                  <input
+                  <input aria-label="Notas u Observaciones del Archivo (Opcional)"
                     type="text"
                     value={fileNotes}
                     onChange={(e) => setFileNotes(e.target.value)}

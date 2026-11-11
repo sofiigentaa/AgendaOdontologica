@@ -85,14 +85,14 @@ export const ResetPasswordView: React.FC = () => {
               <label className="text-xs font-semibold text-slate-700">Contraseña nueva (12 caracteres o más)</label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input type="password" required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
+                <input aria-label="Contraseña nueva (12 caracteres o más)" type="password" required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
               </div>
             </div>
             <div className="space-y-1.5 text-left">
               <label className="text-xs font-semibold text-slate-700">Repetila</label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input type="password" required autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} className={inputClass} />
+                <input aria-label="Repetir contraseña nueva" type="password" required autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} className={inputClass} />
               </div>
             </div>
             <button

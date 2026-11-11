@@ -57,7 +57,8 @@ import { PatientSearchSelect } from './components/PatientSearchSelect';
 import { GoogleActionModal, GoogleActionType } from './components/GoogleActionModal';
 import { initAuth, googleSignIn, logoutGoogle, getAccessToken } from './services/googleAuth';
 import { createGoogleCalendarEvent, sendGmailAppointmentConfirmation } from './services/googleWorkspace';
-import { formatDateWithDayName, getTodayISO } from './utils/time';
+import { formatDateDDMMYYYY, formatDateWithDayName, getTodayISO } from './utils/time';
+import { normalizeDentist } from './utils/dentist';
 import { filterContacts } from './utils/contactFilters';
 import {
   mergeByIdPreservingOrder,
@@ -203,10 +204,19 @@ export default function App() {
     return mergeByIdPreservingOrder(fresh, prev);
   }
 
-  function applyContactsFromSync(fresh: Contact[]) {
-    if (!fresh || fresh.length === 0) return;
+  // Quita de la copia local los registros que el servidor informa como
+  // borrados (otro equipo los eliminó mientras este estaba desconectado).
+  function dropDeleted<T extends { id: string }>(list: T[], deletedIds?: string[]): T[] {
+    if (!deletedIds || deletedIds.length === 0) return list;
+    const gone = new Set(deletedIds);
+    const kept = list.filter((x) => !gone.has(x.id));
+    return kept.length === list.length ? list : kept;
+  }
+
+  function applyContactsFromSync(fresh: Contact[], deletedIds?: string[]) {
+    if ((!fresh || fresh.length === 0) && (!deletedIds || deletedIds.length === 0)) return;
     setContacts((prev) => {
-      const merged = pickIfUnchanged(prev, mergeById(fresh, prev), isSameContactRecord);
+      const merged = pickIfUnchanged(prev, dropDeleted(mergeById(dropDeleted(fresh || [], deletedIds), prev), deletedIds), isSameContactRecord);
       if (merged !== prev) {
         try { saveStoredContacts(merged); } catch {}
       }
@@ -214,11 +224,11 @@ export default function App() {
     });
   }
 
-  function applyAppointmentsFromSync(fresh: Appointment[]) {
-    if (!fresh || fresh.length === 0) return;
+  function applyAppointmentsFromSync(fresh: Appointment[], deletedIds?: string[]) {
+    if ((!fresh || fresh.length === 0) && (!deletedIds || deletedIds.length === 0)) return;
     setAppointments((prev) => {
-      const mergedIncoming = mergeAppointmentsWithState(fresh, prev);
-      const fullMerged = pickIfUnchanged(prev, mergeById(mergedIncoming, prev), isSameAppointmentRecord);
+      const mergedIncoming = mergeAppointmentsWithState(dropDeleted(fresh || [], deletedIds), prev);
+      const fullMerged = pickIfUnchanged(prev, dropDeleted(mergeById(mergedIncoming, prev), deletedIds), isSameAppointmentRecord);
       if (fullMerged !== prev) {
         try { saveStoredAppointments(fullMerged); } catch {}
       }
@@ -335,11 +345,11 @@ export default function App() {
   // sin borrar nada que el dispositivo tenga y el servidor todavía no.
   const syncFreshContactsAndAppointments = () => {
     fetchContactsFresh().then((fresh) => {
-      applyContactsFromSync(fresh);
+      if (fresh) applyContactsFromSync(fresh.records, fresh.deletedIds);
     });
 
     fetchAppointmentsFresh().then((fresh) => {
-      applyAppointmentsFromSync(fresh);
+      if (fresh) applyAppointmentsFromSync(fresh.records, fresh.deletedIds);
     });
   };
 
@@ -368,21 +378,14 @@ export default function App() {
     }
   };
 
-  // Al iniciar sesión se traen los datos del servidor. Antes la carga inicial
-  // corría antes del login (respondía 401) y la agenda quedaba vacía hasta
-  // recargar la página o cambiar de pestaña.
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    syncFreshContactsAndAppointments();
-    fetchFromSupabase().then((sbData) => {
-      applyAuxiliaryAgenda(sbData);
-    }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+  // Recarga al volver a la pestaña: solo con sesión iniciada (antes disparaba
+  // pedidos que respondían 401 en el primer acceso).
+  const isAuthenticatedRef = React.useRef(false);
+  isAuthenticatedRef.current = isAuthenticated;
 
-  // Re-sync automatically via backend when mobile or PC browser tab becomes active/visible
   useEffect(() => {
     const handleActiveSync = () => {
+      if (!isAuthenticatedRef.current) return;
       // Contactos y turnos: siempre frescos de Postgres, combinados por id
       syncFreshContactsAndAppointments();
 
@@ -406,21 +409,14 @@ export default function App() {
     };
   }, []);
 
-  // Initialize data from local storage and sync with backend/Postgres
+  // 1) Copia local: se muestra enseguida, no necesita sesión.
   useEffect(() => {
-    const localContacts = getStoredContacts();
-    const localReminders = getStoredReminders();
-    const localNotes = getStoredNotes();
-    const localAttachments = getStoredAttachments();
-    const localAppointments = getStoredAppointments();
-    const localInsuranceFiles = getStoredInsuranceFiles();
-
-    setContacts(localContacts);
-    setReminders(localReminders);
-    setNotes(localNotes);
-    setAttachments(localAttachments);
-    setAppointments(localAppointments);
-    setInsuranceFiles(localInsuranceFiles);
+    setContacts(getStoredContacts());
+    setReminders(getStoredReminders());
+    setNotes(getStoredNotes());
+    setAttachments(getStoredAttachments());
+    setAppointments(getStoredAppointments());
+    setInsuranceFiles(getStoredInsuranceFiles());
 
     // Sync large files from IndexedDB if available
     getAllInsuranceFilesFromIDB().then((idbFiles) => {
@@ -428,30 +424,43 @@ export default function App() {
         setInsuranceFiles(idbFiles);
       }
     }).catch(() => {});
+  }, []);
 
-    // 1. Contactos y turnos: siempre traer la versión fresca de Postgres y
-    // combinarla por id con lo local (nunca reemplaza la lista entera).
-    syncFreshContactsAndAppointments();
+  // 2) Servidor: recién cuando /api/auth/me confirmó la sesión. Antes se
+  // pedían datos antes de tener la cookie y respondían 401.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const localContacts = getStoredContacts();
+    const localReminders = getStoredReminders();
+    const localNotes = getStoredNotes();
+    const localAppointments = getStoredAppointments();
+    const localInsuranceFiles = getStoredInsuranceFiles();
 
-    // Si Postgres no tenía nada todavía, empujamos lo local para sembrarlo.
-    fetchContactsFresh().then((freshContacts) => {
-      if (freshContacts.length === 0 && localContacts.length > 0) {
-        localContacts.forEach((c) => upsertContact(c));
+    // Contactos y turnos: versión fresca de Postgres combinada por id con lo
+    // local. Si el servidor está vacío (y la lectura funcionó), se siembra con
+    // lo local; una lectura fallida ya no se confunde con "vacío".
+    fetchContactsFresh().then(async (fresh) => {
+      if (!fresh) return;
+      applyContactsFromSync(fresh.records, fresh.deletedIds);
+      if (fresh.records.length === 0 && localContacts.length > 0) {
+        for (const c of localContacts) await upsertContact(c);
+      }
+      const appts = await fetchAppointmentsFresh();
+      if (!appts) return;
+      applyAppointmentsFromSync(appts.records, appts.deletedIds);
+      if (appts.records.length === 0 && localAppointments.length > 0) {
+        for (const a of localAppointments) {
+          await upsertAppointment({ ...a, dentist: normalizeDentist(a.dentist) }, { force: true });
+        }
       }
     });
-    fetchAppointmentsFresh().then((freshAppts) => {
-      if (freshAppts.length === 0 && localAppointments.length > 0) {
-        localAppointments.forEach((a) => upsertAppointment(a));
-      }
-    });
 
-    // 2. Recordatorios, notas y archivos de obra social: sistema anterior
+    // Recordatorios, notas y archivos de obra social: sistema anterior
     // (sync como lista completa vía /api/sync/agenda)
     fetchFromSupabase().then((sbData) => {
       if (sbData) {
         applyAuxiliaryAgenda(sbData);
       } else {
-        // Si el backend no tenía nada, sembramos con el dataset local
         syncToSupabase({
           reminders: localReminders,
           notes: localNotes,
@@ -460,31 +469,20 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // 3. Un solo canal SSE. No reordenar ni refrescar la lista completa en cada
+    // Un solo canal SSE. No reordenar ni refrescar la lista completa en cada
     // evento: eso hacía que las tarjetas de pacientes saltaran de lugar.
-
     const unsubscribeSupabaseRealtime = subscribeToSupabaseRealtime((payload) => {
       if (!payload || !payload.type) return;
 
-      if (payload.type === 'APPOINTMENT_CONFIRMED') {
+      if (payload.type === 'APPOINTMENT_CONFIRMED' || payload.type === 'APPOINTMENT_CANCELLED') {
         const data = payload.data || {};
-        showToast(`🟢 ¡Turno Confirmado! ${data.patientName || 'El paciente'} confirmó su asistencia para el día ${data.date || ''} a las ${data.time || ''} hs.`);
-        if (payload.agenda?.appointments) {
-          applyAppointmentsFromSync(payload.agenda.appointments);
-        } else if (payload.appointment) {
-          applyAppointmentsFromSync([payload.appointment]);
-        }
-        return;
-      }
-
-      if (payload.type === 'APPOINTMENT_CANCELLED') {
-        const data = payload.data || {};
-        showToast(`🔴 Turno Cancelado: ${data.patientName || 'El paciente'} canceló su turno del día ${data.date || ''} a las ${data.time || ''} hs.`);
-        if (payload.agenda?.appointments) {
-          applyAppointmentsFromSync(payload.agenda.appointments);
-        } else if (payload.appointment) {
-          applyAppointmentsFromSync([payload.appointment]);
-        }
+        const when = `${formatDateDDMMYYYY(data.date)} a las ${data.time || ''} hs`;
+        showToast(
+          payload.type === 'APPOINTMENT_CONFIRMED'
+            ? `🟢 ¡Turno Confirmado! ${data.patientName || 'El paciente'} confirmó su asistencia para el día ${when}.`
+            : `🔴 Turno Cancelado: ${data.patientName || 'El paciente'} canceló su turno del día ${when}.`
+        );
+        if (payload.appointment) applyAppointmentsFromSync([payload.appointment]);
         return;
       }
 
@@ -497,6 +495,13 @@ export default function App() {
           const updated = prev.filter((c) => c.id !== payload.id);
           try { saveStoredContacts(updated); } catch {}
           return updated;
+        });
+        setAppointments((prev) => {
+          const updated = prev.filter((a) => a.contactId !== payload.id);
+          if (updated.length !== prev.length) {
+            try { saveStoredAppointments(updated); } catch {}
+          }
+          return updated.length !== prev.length ? updated : prev;
         });
         return;
       }
@@ -513,8 +518,11 @@ export default function App() {
         return;
       }
       if ((payload.type === 'AGENDA_UPDATE' || payload.type === 'INITIAL_SYNC') && payload.data) {
-        if (payload.data.contacts) applyContactsFromSync(payload.data.contacts);
-        if (payload.data.appointments) applyAppointmentsFromSync(payload.data.appointments);
+        const deleted = payload.data.deletedIds || {};
+        const deletedContacts = Object.keys(deleted.contacts || {});
+        const deletedAppts = Object.keys(deleted.appointments || {});
+        applyContactsFromSync(payload.data.contacts || [], deletedContacts);
+        applyAppointmentsFromSync(payload.data.appointments || [], deletedAppts);
         applyAuxiliaryAgenda(payload.data);
       }
     });
@@ -522,7 +530,8 @@ export default function App() {
     return () => {
       unsubscribeSupabaseRealtime();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   // Google Auth Listener
   useEffect(() => {
@@ -699,6 +708,51 @@ export default function App() {
     saveStoredAppointments(newAppts);
   };
 
+  // Guarda un turno en el servidor y, si lo rechaza (superposición 409, datos
+  // inválidos 400, etc.), vuelve atrás el cambio local y muestra el motivo.
+  // Antes se mostraba "éxito" aunque el servidor respondiera error.
+  const persistAppointment = async (
+    appt: Appointment,
+    previousList: Appointment[],
+    successMessage: string | null,
+    options: { force?: boolean } = {}
+  ): Promise<boolean> => {
+    const result = await upsertAppointment(appt, options);
+    if (result.ok) {
+      if (successMessage) showToast(successMessage);
+      return true;
+    }
+    if (result.status === 0) {
+      // Sin conexión: el cambio queda local y se reintenta al volver.
+      showToast(`⚠️ ${result.error}`);
+      return false;
+    }
+    setAppointments(previousList);
+    saveStoredAppointments(previousList);
+    showToast(`❌ No se guardó el turno: ${result.error}`);
+    return false;
+  };
+
+  const persistContact = async (
+    contact: Contact,
+    previousList: Contact[],
+    successMessage: string | null
+  ): Promise<boolean> => {
+    const result = await upsertContact(contact);
+    if (result.ok) {
+      if (successMessage) showToast(successMessage);
+      return true;
+    }
+    if (result.status === 0) {
+      showToast(`⚠️ ${result.error}`);
+      return false;
+    }
+    setContacts(previousList);
+    saveStoredContacts(previousList);
+    showToast(`❌ No se guardó el paciente: ${result.error}`);
+    return false;
+  };
+
   const handleUpdateAppointmentStatus = (
     appointmentId: string,
     status: 'pending' | 'confirmed' | 'cancelled'
@@ -711,15 +765,15 @@ export default function App() {
       }
       return a;
     });
+    const previous = appointments;
     updateAppointments(updated);
-    if (updatedAppt) upsertAppointment(updatedAppt);
-    if (status === 'confirmed') {
-      showToast('✔ Turno marcado como Confirmado.');
-    } else if (status === 'cancelled') {
-      showToast('❌ Turno marcado como Cancelado (horario libre).');
-    } else {
-      showToast('⏳ Estado del turno actualizado a pendiente.');
-    }
+    const msg =
+      status === 'confirmed'
+        ? '✔ Turno marcado como Confirmado.'
+        : status === 'cancelled'
+        ? '❌ Turno marcado como Cancelado (horario libre).'
+        : '⏳ Estado del turno actualizado a pendiente.';
+    if (updatedAppt) void persistAppointment(updatedAppt, previous, msg);
   };
 
   const updateInsuranceFiles = (newFiles: InsuranceFolderFile[]) => {
@@ -781,9 +835,9 @@ export default function App() {
       }
       return a;
     });
+    const previous = appointments;
     updateAppointments(updated);
-    if (updatedAppt) upsertAppointment(updatedAppt);
-    showToast('Datos financieros del turno actualizados');
+    if (updatedAppt) void persistAppointment(updatedAppt, previous, 'Datos financieros del turno actualizados');
   };
 
   // Appointment Handlers
@@ -804,26 +858,28 @@ export default function App() {
       porcentajeHonorario?: number;
       appointmentId?: string;
     },
-    appointmentId?: string
+    appointmentId?: string,
+    options: { force?: boolean } = {}
   ) => {
     const targetId = data.appointmentId || appointmentId;
+    const previous = appointments;
     if (targetId) {
       const existing = appointments.find((a) => a.id === targetId);
-      const updatedAppt = { ...existing, ...data, id: targetId } as Appointment;
+      const { appointmentId: _ignored, ...fields } = data;
+      const updatedAppt = { ...existing, ...fields, id: targetId } as Appointment;
       const updated = appointments.map((a) => (a.id === targetId ? updatedAppt : a));
       updateAppointments(updated);
-      upsertAppointment(updatedAppt);
-      showToast('Turno actualizado en el calendario');
+      void persistAppointment(updatedAppt, previous, 'Turno actualizado en el calendario', options);
     } else {
+      const { appointmentId: _ignored, ...fields } = data;
       const newAppt: Appointment = {
         id: `appt-${Date.now()}`,
-        dentist: (data.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Marie',
-        ...data,
+        ...fields,
+        dentist: normalizeDentist(fields.dentist || 'Marie'),
         createdAt: new Date().toISOString(),
       };
       updateAppointments([newAppt, ...appointments]);
-      upsertAppointment(newAppt);
-      showToast('Nuevo turno agendado en el calendario');
+      void persistAppointment(newAppt, previous, 'Nuevo turno agendado en el calendario', options);
     }
   };
 
@@ -836,16 +892,17 @@ export default function App() {
       }
       return a;
     });
+    const previous = appointments;
     updateAppointments(updated);
-    if (toggled) upsertAppointment(toggled);
-    showToast('Estado del turno actualizado');
+    if (toggled) void persistAppointment(toggled, previous, 'Estado del turno actualizado');
   };
 
   const handleDeleteAppointment = (appointmentId: string) => {
     const updated = appointments.filter((a) => a.id !== appointmentId);
     updateAppointments(updated);
-    deleteAppointmentRemote(appointmentId);
-    fetch(`/api/appointment/${appointmentId}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    deleteAppointmentRemote(appointmentId).then((ok) => {
+      if (!ok) showToast('⚠️ El turno se quitó en este equipo, pero el servidor no confirmó el borrado.');
+    });
     showToast('Turno eliminado del calendario');
   };
 
@@ -863,7 +920,6 @@ export default function App() {
     updateAppointments(updated);
     cancelledIds.forEach((id) => {
       deleteAppointmentRemote(id);
-      fetch(`/api/appointment/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
     });
     showToast(`🗑️ ${cancelledIds.length} turno${cancelledIds.length === 1 ? '' : 's'} cancelado${cancelledIds.length === 1 ? '' : 's'} eliminado${cancelledIds.length === 1 ? '' : 's'}`);
   };
@@ -945,7 +1001,7 @@ export default function App() {
         time: payload.appointment.time || '10:00',
         durationMinutes: 30,
         motive: payload.appointment.motive || payload.patient.notes || 'Consulta odontológica',
-        dentist: (payload.appointment as any).dentist || 'Yani',
+        dentist: normalizeDentist((payload.appointment as any).dentist || 'Yani'),
         completed: false,
         createdAt: new Date().toISOString(),
       };
@@ -990,10 +1046,10 @@ export default function App() {
         ...data,
         updatedAt: new Date().toISOString(),
       } as Contact;
+      const previous = contacts;
       const updated = contacts.map((c) => (c.id === editingContact.id ? updatedContact : c));
       updateContacts(updated);
-      upsertContact(updatedContact);
-      showToast(`Contacto "${data.fullName}" actualizado correctamente`);
+      void persistContact(updatedContact, previous, `Contacto "${data.fullName}" actualizado correctamente`);
       if (selectedDetailContact?.id === editingContact.id) {
         setSelectedDetailContact(updatedContact);
       }
@@ -1015,9 +1071,9 @@ export default function App() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      const previous = contacts;
       updateContacts([newContact, ...contacts]);
-      upsertContact(newContact);
-      showToast(`Nuevo contacto "${newContact.fullName}" registrado`);
+      void persistContact(newContact, previous, `Nuevo contacto "${newContact.fullName}" registrado`);
     }
   };
 
@@ -1028,9 +1084,16 @@ export default function App() {
     const filteredR = reminders.filter((r) => r.contactId !== deletingContact.id);
     const filteredN = notes.filter((n) => n.contactId !== deletingContact.id);
     const filteredA = attachments.filter((a) => a.contactId !== deletingContact.id);
+    // Los turnos del paciente también se borran (la base ya los borraba en
+    // cascada, pero quedaban en pantalla como "Paciente" bloqueando el horario).
+    const removedAppts = appointments.filter((a) => a.contactId === deletingContact.id);
+    const filteredAppts = appointments.filter((a) => a.contactId !== deletingContact.id);
 
     updateContacts(filteredC);
-    deleteContactRemote(deletingContact.id);
+    if (removedAppts.length > 0) updateAppointments(filteredAppts);
+    deleteContactRemote(deletingContact.id).then((ok) => {
+      if (!ok) showToast('⚠️ El paciente se quitó en este equipo, pero el servidor no confirmó el borrado.');
+    });
     updateReminders(filteredR);
     updateNotes(filteredN);
     updateAttachments(filteredA);
@@ -1391,20 +1454,22 @@ export default function App() {
       />
 
       {/* Floating Action Buttons */}
-      <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-30 flex items-center gap-2.5">
+      <div className="fixed bottom-24 md:bottom-6 right-3 md:right-6 z-30 flex items-center gap-2.5">
         <button
           id="btn-floating-add-note"
           onClick={() => setIsQuickNoteModalOpen(true)}
-          className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-[#4CAF7D] hover:bg-[#3d986b] text-white font-bold text-xs rounded-full shadow-xl border border-white/40 flex items-center gap-1.5 sm:gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+          aria-label={`Notas (${notes.length})`}
+          className="p-3 sm:px-4 sm:py-3 bg-[#4CAF7D] hover:bg-[#3d986b] text-white font-bold text-xs rounded-full shadow-xl border border-white/40 flex items-center gap-1.5 sm:gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
           title="Ver o añadir notas u observaciones médicas"
         >
           <FileText className="w-4 h-4 text-white" />
-          <span>Notas ({notes.length})</span>
+          {/* En celulares solo el ícono, para no tapar el calendario. */}
+          <span className="hidden sm:inline">Notas ({notes.length})</span>
         </button>
       </div>
 
       {/* Main Content Body */}
-      <main className="flex-1 max-w-[1600px] 2xl:max-w-[1780px] w-full mx-auto px-2 sm:px-6 lg:px-8 py-3 sm:py-5 pb-28 md:pb-6 space-y-3 sm:space-y-5">
+      <main className="flex-1 max-w-[1600px] 2xl:max-w-[1780px] w-full mx-auto px-2 sm:px-6 lg:px-8 py-3 sm:py-5 pb-40 md:pb-24 space-y-3 sm:space-y-5">
 
         {/* Tab Switch View Render */}
         {activeTab === 'calendar' ? (
@@ -1579,7 +1644,7 @@ export default function App() {
         <div className="max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="flex items-center gap-1.5 font-medium">
             <BookOpen className="w-4 h-4 text-blue-600" />
-            <span><strong>Mi Agenda</strong> — Aplicación de gestión de contactos y obras sociales</span>
+            <span><strong>Agenda Odontológica</strong> — Consultorio Marie &amp; Yani</span>
           </p>
           <p className="text-slate-400">
             Exporta tus contactos o envía WhatsApps con un solo clic.
@@ -1593,6 +1658,7 @@ export default function App() {
         onClose={() => setIsFormModalOpen(false)}
         onSave={handleSaveContact}
         initialData={editingContact}
+        existingContacts={contacts}
       />
 
       <ContactDetailModal

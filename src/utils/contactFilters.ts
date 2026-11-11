@@ -1,20 +1,19 @@
 import { CallReminder, Contact, ContactNote, FilterType } from '../types';
+import { normalizeForSearch } from './inputValidation';
+
+/** Accent- and case-insensitive "contains" ("maria" finds "María"). */
+const textMatches = (value: string | null | undefined, normalizedQuery: string): boolean =>
+  Boolean(value) && normalizeForSearch(value).includes(normalizedQuery);
 
 export function matchesContactSearch(contact: Contact, searchTerm: string): boolean {
   if (!searchTerm.trim()) return true;
-  const query = searchTerm.toLowerCase();
-  const nameMatch = contact.fullName.toLowerCase().includes(query);
-  const phoneMatch =
-    contact.primaryPhone.includes(query) ||
-    Boolean(contact.altPhone && contact.altPhone.includes(query));
-  const emailMatch = contact.email ? contact.email.toLowerCase().includes(query) : false;
-  const insuranceMatch = contact.insuranceName
-    ? contact.insuranceName.toLowerCase().includes(query)
-    : false;
-  const affiliateMatch = contact.affiliateNumber
-    ? contact.affiliateNumber.toLowerCase().includes(query)
-    : false;
-  const obsMatch = contact.observations ? contact.observations.toLowerCase().includes(query) : false;
+  const query = normalizeForSearch(searchTerm);
+  const nameMatch = textMatches(contact.fullName, query);
+  const phoneMatch = textMatches(contact.primaryPhone, query) || textMatches(contact.altPhone, query);
+  const emailMatch = textMatches(contact.email, query);
+  const insuranceMatch = textMatches(contact.insuranceName, query);
+  const affiliateMatch = textMatches(contact.affiliateNumber, query);
+  const obsMatch = textMatches(contact.observations, query);
   return nameMatch || phoneMatch || emailMatch || insuranceMatch || affiliateMatch || obsMatch;
 }
 
@@ -56,13 +55,13 @@ export function filterPatientsForAutocomplete(contacts: Contact[], query: string
   const sorted = [...contacts].sort((a, b) =>
     a.fullName.localeCompare(b.fullName, 'es', { sensitivity: 'base' })
   );
-  const q = query.trim().toLowerCase();
+  const q = normalizeForSearch(query);
   if (!q) return sorted;
   return sorted.filter((c) => {
-    const nameMatch = c.fullName.toLowerCase().includes(q);
-    const phoneMatch = c.primaryPhone ? c.primaryPhone.toLowerCase().includes(q) : false;
-    const insuranceMatch = c.insuranceName ? c.insuranceName.toLowerCase().includes(q) : false;
-    const affiliateMatch = c.affiliateNumber ? c.affiliateNumber.toLowerCase().includes(q) : false;
+    const nameMatch = textMatches(c.fullName, q);
+    const phoneMatch = textMatches(c.primaryPhone, q);
+    const insuranceMatch = textMatches(c.insuranceName, q);
+    const affiliateMatch = textMatches(c.affiliateNumber, q);
     const particularMatch = c.isParticular && 'particular'.includes(q);
     return nameMatch || phoneMatch || insuranceMatch || affiliateMatch || particularMatch;
   });

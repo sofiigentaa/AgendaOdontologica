@@ -188,10 +188,10 @@ export const ContactCard: React.FC<ContactCardProps> = ({
           {/* Contact Methods List */}
           <div className="space-y-1 text-[11px] text-slate-600 my-1.5">
             {contact.primaryPhone && (
-              <div className="flex items-center justify-between group/phone hover:text-slate-900">
-                <div className="flex items-center gap-1.5 truncate">
-                  <Phone className="w-3 h-3 text-slate-400" />
-                  <span className="font-medium text-slate-700">{contact.primaryPhone}</span>
+              <div className="flex items-center justify-between gap-1 group/phone hover:text-slate-900 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="font-medium text-slate-700 truncate" title={contact.primaryPhone}>{contact.primaryPhone}</span>
                 </div>
                 <div className="flex items-center gap-0.5">
                   <button
@@ -326,7 +326,7 @@ export const ContactCard: React.FC<ContactCardProps> = ({
         {/* Contact info */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#2E7D5E] transition-colors truncate notranslate" translate="no">
+            <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#2E7D5E] transition-colors truncate max-w-full notranslate" translate="no" title={contact.fullName}>
               {contact.fullName}
             </h3>
 
@@ -366,9 +366,9 @@ export const ContactCard: React.FC<ContactCardProps> = ({
 
           <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-0.5 flex-wrap">
             {contact.primaryPhone && (
-              <span className="font-medium text-slate-700 flex items-center gap-1">
-                <Phone className="w-3 h-3 text-slate-400" />
-                {contact.primaryPhone}
+              <span className="font-medium text-slate-700 flex items-center gap-1 min-w-0 max-w-full">
+                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                <span className="truncate">{contact.primaryPhone}</span>
               </span>
             )}
             {contact.email && (

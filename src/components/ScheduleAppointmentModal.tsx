@@ -15,8 +15,11 @@ import {
 import { Appointment, Contact } from '../types';
 import { TREATMENT_PRESETS } from '../constants/treatments';
 import { formatDuration, getTodayISO, formatDateDDMMYYYY } from '../utils/time';
-import { findConflictingAppointment } from '../utils/appointmentConflicts';
+import { crossesMidnight, findConflictingAppointment } from '../utils/appointmentConflicts';
+import { isValidISODate } from '../utils/time';
+import { MAX_DURATION_MINUTES, MIN_DURATION_MINUTES, validateFinanceFields } from '../utils/recordValidation';
 import { PatientSearchSelect } from './PatientSearchSelect';
+import { filterPatientsForAutocomplete } from '../utils/contactFilters';
 import { CustomTimePicker } from './CustomTimePicker';
 
 interface ScheduleAppointmentModalProps {
@@ -38,7 +41,7 @@ interface ScheduleAppointmentModalProps {
     materiales?: number;
     mecanicoDental?: number;
     porcentajeHonorario?: number;
-  }, appointmentId?: string) => void;
+  }, appointmentId?: string, options?: { force?: boolean }) => void;
   onOpenAddContactModal: () => void;
   initialContactId?: string;
   initialDate?: string;
@@ -159,14 +162,11 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
   const selectedContact = contacts.find((c) => c.id === selectedContactId);
 
-  const filteredContacts = contacts.filter((c) =>
-    c.fullName.toLowerCase().includes(searchPatient.toLowerCase()) ||
-    (c.insuranceName && c.insuranceName.toLowerCase().includes(searchPatient.toLowerCase()))
-  );
+  const filteredContacts = filterPatientsForAutocomplete(contacts, searchPatient);
 
   const quickTimePresets = ['08:30', '09:00', '10:00', '11:30', '14:00', '15:00', '16:30', '17:30'];
 
-  const processSave = () => {
+  const processSave = (force = false) => {
     const apptPayload = {
       contactId: selectedContactId,
       date,
@@ -180,11 +180,11 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
       estampillas: Number(estampillas) || 0,
       materiales: Number(materiales) || 0,
       mecanicoDental: Number(mecanicoDental) || 0,
-      porcentajeHonorario: Number(porcentajeHonorario) || 50,
+      porcentajeHonorario: Number.isFinite(Number(porcentajeHonorario)) ? Number(porcentajeHonorario) : 50,
       appointmentId: editingAppointment ? editingAppointment.id : undefined,
     };
 
-    onSaveAppointment(apptPayload, editingAppointment ? editingAppointment.id : undefined);
+    onSaveAppointment(apptPayload, editingAppointment ? editingAppointment.id : undefined, { force });
     setConflictAppointment(null);
     onClose();
 
@@ -214,17 +214,37 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
       alert('Por favor selecciona un horario.');
       return;
     }
-
-    // When editing an existing appointment, save changes directly without showing conflict popup
-    if (editingAppointment) {
-      processSave();
+    if (!isValidISODate(date)) {
+      alert('La fecha elegida no existe. Revisá el día y el mes.');
       return;
     }
 
     const currentDuration = Number(durationMinutes) || 30;
+    if (currentDuration < MIN_DURATION_MINUTES || currentDuration > MAX_DURATION_MINUTES) {
+      alert(`La duración debe estar entre ${MIN_DURATION_MINUTES} minutos y ${MAX_DURATION_MINUTES / 60} horas.`);
+      return;
+    }
+    if (crossesMidnight(time, currentDuration)) {
+      alert('El turno no puede terminar después de la medianoche. Acortá la duración o elegí un horario anterior.');
+      return;
+    }
+    const finance = validateFinanceFields({
+      ingresos: Number(ingresos) || 0,
+      descartables: Number(descartables) || 0,
+      estampillas: Number(estampillas) || 0,
+      materiales: Number(materiales) || 0,
+      mecanicoDental: Number(mecanicoDental) || 0,
+      porcentajeHonorario: Number(porcentajeHonorario),
+    });
+    if (!finance.ok) {
+      alert(finance.error);
+      return;
+    }
 
     if (appointments && appointments.length > 0) {
+      // También al editar: se excluye el propio turno (id) de la comparación.
       const conflicting = findConflictingAppointment(appointments, {
+        id: editingAppointment?.id,
         date,
         time,
         durationMinutes: currentDuration,
@@ -472,7 +492,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
                   3. Fecha *
                 </label>
-                <input
+                <input aria-label="Fecha del turno"
                   type="date"
                   data-testid="appt-date"
                   value={date}
@@ -590,7 +610,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
               <label className="block text-[11px] font-bold text-slate-700">
                 Detalle / Nombre del Tratamiento u Observaciones:
               </label>
-              <input
+              <input aria-label="Detalle / Nombre del Tratamiento u Observaciones"
                 type="text"
                 value={motive}
                 onChange={(e) => {
@@ -622,7 +642,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-xs font-bold text-slate-700 shrink-0">Tiempo de consulta:</span>
                 <div className="relative w-28 sm:w-32">
-                  <input
+                  <input aria-label="Duración en minutos"
                     type="number"
                     min="5"
                     max="480"
@@ -683,7 +703,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Ingreso Cobrado ($)
                 </label>
-                <input
+                <input aria-label="Ingreso Cobrado ($)"
                   type="number"
                   step="any"
                   min="0"
@@ -702,7 +722,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   % Honorarios
                 </label>
-                <input
+                <input aria-label="% Honorario profesional"
                   type="number"
                   step="any"
                   min="0"
@@ -726,7 +746,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
                   <span className="text-[10px] text-slate-500 block">Descartables:</span>
-                  <input
+                  <input aria-label="Descartables"
                     type="number"
                     step="any"
                     min="0"
@@ -743,7 +763,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
                 <div>
                   <span className="text-[10px] text-slate-500 block">Estampillas:</span>
-                  <input
+                  <input aria-label="Estampillas"
                     type="number"
                     step="any"
                     min="0"
@@ -760,7 +780,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
                 <div>
                   <span className="text-[10px] text-slate-500 block">Materiales:</span>
-                  <input
+                  <input aria-label="Materiales"
                     type="number"
                     step="any"
                     min="0"
@@ -777,7 +797,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
 
                 <div>
                   <span className="text-[10px] text-slate-500 block">Mecánico:</span>
-                  <input
+                  <input aria-label="Mecánico dental"
                     type="number"
                     step="any"
                     min="0"
@@ -900,7 +920,7 @@ export const ScheduleAppointmentModal: React.FC<ScheduleAppointmentModalProps> =
                 </button>
                 <button
                   type="button"
-                  onClick={() => processSave()}
+                  onClick={() => processSave(true)}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
                   title="Agendar superponiendo intencionalmente"
                 >

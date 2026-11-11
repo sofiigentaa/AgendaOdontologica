@@ -134,7 +134,7 @@ export const DateJumpWidget: React.FC<DateJumpWidgetProps> = ({
         </div>
 
         <div className="relative flex items-center flex-1 min-w-0">
-          <input
+          <input aria-label="Ir a la fecha (ej. 16/08)"
             type="text"
             value={textVal}
             onChange={(e) => {

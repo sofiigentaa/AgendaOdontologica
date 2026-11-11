@@ -22,9 +22,12 @@ export default defineConfig({
   webServer: useExternalServer
     ? undefined
     : {
-        command: 'PORT=3001 npm run dev',
+        // Modo demo: entra sin login, así la suite corre sin credenciales.
+        // DATABASE_URL vacío a propósito: dotenv no pisa variables ya
+        // definidas, así la suite nunca escribe en la base de .env.local.
+        command: 'DATABASE_URL= POSTGRES_URL= PORT=3001 DEMO_MODE=true npm run dev',
         url: 'http://localhost:3001',
-        reuseExistingServer: true,
+        reuseExistingServer: !process.env.CI,
         timeout: 120_000,
       },
   projects: [

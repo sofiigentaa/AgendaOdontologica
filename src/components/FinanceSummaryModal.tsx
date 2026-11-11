@@ -16,6 +16,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Appointment, Contact } from '../types';
+import { validateFinanceFields } from '../utils/recordValidation';
+import { normalizeDentist } from '../utils/dentist';
 import {
   calculateDailyTotals,
   calculateTurnStats,
@@ -124,6 +126,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
   const [editMecanico, setEditMecanico] = useState<number>(0);
   const [editPorcentaje, setEditPorcentaje] = useState<number>(50);
   const [editDentist, setEditDentist] = useState<'Yani' | 'Marie' | 'Ambas'>('Yani');
+  const [financeError, setFinanceError] = useState<string | null>(null);
 
   const getContact = (contactId: string) => contacts.find((c) => c.id === contactId);
 
@@ -135,10 +138,26 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
     setEditMateriales(appt.materiales || 0);
     setEditMecanico(appt.mecanicoDental || 0);
     setEditPorcentaje(appt.porcentajeHonorario ?? 50);
-    setEditDentist((appt.dentist as 'Yani' | 'Marie' | 'Ambas') || 'Yani');
+    setEditDentist(normalizeDentist(appt.dentist));
+    setFinanceError(null);
   };
 
   const handleSaveFinances = (apptId: string) => {
+    // Validación real (los atributos min/max del HTML no impiden escribir -7000 o 150).
+    const values = {
+      ingresos: editIngresos,
+      descartables: editDescartables,
+      estampillas: editEstampillas,
+      materiales: editMateriales,
+      mecanicoDental: editMecanico,
+      porcentajeHonorario: editPorcentaje,
+    };
+    const check = validateFinanceFields(values);
+    if (!check.ok || Object.values(values).some((v) => !Number.isFinite(v))) {
+      setFinanceError(check.error || 'Revisá los montos ingresados.');
+      return;
+    }
+    setFinanceError(null);
     onEditAppointmentFinances(apptId, {
       ingresos: editIngresos,
       descartables: editDescartables,
@@ -334,7 +353,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
               </button>
 
               <div className="flex items-center gap-1.5 ml-1">
-                <input
+                <input aria-label="Fecha del resumen"
                   type="date"
                   value={selectedDate}
                   max={getTodayString()}
@@ -627,7 +646,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                                 <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
                                   Odontóloga(s) a cargo:
                                 </label>
-                                <select
+                                <select aria-label="Odontóloga(s) a cargo"
                                   value={editDentist}
                                   onChange={(e) => setEditDentist(e.target.value as any)}
                                   className="w-full px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900"
@@ -642,7 +661,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                                 <label className="block text-[11px] font-bold text-emerald-900 mb-0.5">
                                   Ingreso Cobrado ($)
                                 </label>
-                                <input
+                                <input aria-label="Ingreso Cobrado ($)"
                                   type="number"
                                   step="any"
                                   min="0"
@@ -661,7 +680,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                                 <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
                                   % Honorario Profesional
                                 </label>
-                                <input
+                                <input aria-label="% Honorario Profesional"
                                   type="number"
                                   step="any"
                                   min="0"
@@ -686,7 +705,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                 <div>
                                   <span className="text-[10px] font-semibold text-slate-600 block">Descartables:</span>
-                                  <input
+                                  <input aria-label="Descartables"
                                     type="number"
                                     step="any"
                                     min="0"
@@ -703,7 +722,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
 
                                 <div>
                                   <span className="text-[10px] font-semibold text-slate-600 block">Estampillas:</span>
-                                  <input
+                                  <input aria-label="Estampillas"
                                     type="number"
                                     step="any"
                                     min="0"
@@ -720,7 +739,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
 
                                 <div>
                                   <span className="text-[10px] font-semibold text-slate-600 block">Materiales:</span>
-                                  <input
+                                  <input aria-label="Materiales"
                                     type="number"
                                     step="any"
                                     min="0"
@@ -737,7 +756,7 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
 
                                 <div>
                                   <span className="text-[10px] font-semibold text-slate-600 block">Mecánico Dental:</span>
-                                  <input
+                                  <input aria-label="Mecánico Dental"
                                     type="number"
                                     step="any"
                                     min="0"
@@ -758,6 +777,9 @@ export const FinanceSummaryModal: React.FC<FinanceSummaryModalProps> = ({
                               <span className="text-xs text-emerald-900 font-bold">
                                 Subtotal Egresos: {formatMoney((editDescartables || 0) + (editEstampillas || 0) + (editMateriales || 0) + (editMecanico || 0))}
                               </span>
+                              {financeError && (
+                                <span role="alert" className="text-xs text-rose-600 font-bold">{financeError}</span>
+                              )}
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"

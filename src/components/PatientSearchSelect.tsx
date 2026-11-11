@@ -119,7 +119,7 @@ export const PatientSearchSelect: React.FC<PatientSearchSelectProps> = ({
           <Search className="w-4 h-4 text-[#2E7D5E]" />
         </div>
 
-        <input
+        <input aria-label="Buscar paciente"
           ref={inputRef}
           id={id}
           type="text"

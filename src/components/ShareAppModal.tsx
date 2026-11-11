@@ -109,7 +109,7 @@ export const ShareAppModal: React.FC<ShareAppModalProps> = ({
               Enlace de tu aplicación
             </label>
             <div className="flex items-center gap-2">
-              <input
+              <input aria-label="Enlace de tu aplicación"
                 type="text"
                 readOnly
                 value={appUrl}

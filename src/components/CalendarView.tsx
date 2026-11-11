@@ -473,7 +473,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             />
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto min-w-0">
             {/* Quick 'Hoy' / 'Mañana' shortcut buttons */}
             <button
               type="button"
@@ -507,7 +507,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Vista Mes
+                <span className="sm:hidden">Mes</span>
+                <span className="hidden sm:inline">Vista Mes</span>
               </button>
               <button
                 type="button"
@@ -536,7 +537,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Lista de Turnos
+                <span className="sm:hidden">Lista</span>
+                <span className="hidden sm:inline">Lista de Turnos</span>
               </button>
             </div>
 
@@ -618,7 +620,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   <span className="text-xs text-slate-600 font-bold shrink-0">
                     Cobertura:
                   </span>
-                  <select
+                  <select aria-label="Filtrar turnos por cobertura"
                     value={selectedInsuranceFilter}
                     onChange={(e) => setSelectedInsuranceFilter(e.target.value)}
                     className="bg-white text-[#2E7D5E] border border-slate-200 hover:border-emerald-400 font-bold text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-[#2E7D5E]/30 transition-colors cursor-pointer shadow-2xs"
@@ -643,7 +645,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   <span className="text-xs text-slate-600 font-bold shrink-0">
                     Motivo:
                   </span>
-                  <select
+                  <select aria-label="Filtrar turnos por motivo"
                     value={selectedMotiveFilter}
                     onChange={(e) => setSelectedMotiveFilter(e.target.value)}
                     className="bg-white text-blue-900 border border-slate-200 hover:border-blue-400 font-bold text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-colors cursor-pointer shadow-2xs"
@@ -736,7 +738,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             {/* Calendar Controls Bar */}
             <div className="bg-[#2E7D5E] text-white p-2.5 sm:px-4 sm:py-2.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-[#24664c] gap-2 rounded-t-2xl">
               {/* Left / Top on mobile: Month Navigator + Prominent 'Ir a Hoy' Button */}
-              <div className="flex items-center justify-between gap-2 shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 min-w-0 sm:shrink-0">
                 <div className="flex items-center gap-1.5 shrink-0">
                   <div className="flex items-center bg-black/20 p-0.5 rounded-lg border border-white/20 shrink-0">
                     <button
@@ -887,9 +889,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           onOpenScheduleModal(dayStr);
                         }}
                         title={`Agendar turno para ${dayOfWeekShort} ${dayNum}`}
-                        className={`${isToday ? 'opacity-100 sm:inline-block' : 'opacity-0 group-hover:opacity-100 hidden sm:inline-block'} px-1.5 py-0.5 text-[#2E7D5E] bg-emerald-50 hover:bg-emerald-100 rounded text-[9.5px] font-bold border border-emerald-200 shrink-0 whitespace-nowrap transition-all`}
+                        aria-label={`Agendar turno para ${dayOfWeekShort} ${dayNum}`}
+                        className={`${isToday ? 'opacity-100 sm:inline-block' : 'opacity-0 group-hover:opacity-100 hidden sm:inline-block'} px-1 sm:px-1.5 py-0.5 text-[#2E7D5E] bg-emerald-50 hover:bg-emerald-100 rounded text-[9.5px] font-bold border border-emerald-200 shrink-0 whitespace-nowrap transition-all max-w-full overflow-hidden`}
                       >
-                        + Turno
+                        <span className="sm:hidden">+</span>
+                        <span className="hidden sm:inline">+ Turno</span>
                       </button>
                     </div>
 
@@ -1742,10 +1746,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               : `la Dra. ${dentistKey}`;
 
                             const baseUrl = window.location.origin;
-                            const patientParam = encodeURIComponent(contact.fullName || 'Paciente');
-                            const dateParam = encodeURIComponent(selectedApptDetail.date || '');
-                            const horaParam = encodeURIComponent(selectedApptDetail.time || '');
-                            const dentistParam = encodeURIComponent(dentistKey);
 
                             // El servidor firma el link (así no se puede adivinar el de otro paciente).
                             let publicToken = '';
@@ -1766,12 +1766,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               return;
                             }
                             const tokenParam = encodeURIComponent(publicToken);
-                            const confirmUrl = `${baseUrl}/?confirm_id=${tokenParam}&action=confirm&paciente=${patientParam}&fecha=${dateParam}&hora=${horaParam}&dentista=${dentistParam}`;
-                            const cancelUrl = `${baseUrl}/?confirm_id=${tokenParam}&action=cancel&paciente=${patientParam}&fecha=${dateParam}&hora=${horaParam}&dentista=${dentistParam}`;
+                            // Sin datos personales en la URL: el servidor los devuelve con el token.
+                            const confirmUrl = `${baseUrl}/?confirm_id=${tokenParam}&action=confirm`;
+                            const cancelUrl = `${baseUrl}/?confirm_id=${tokenParam}&action=cancel`;
 
                             const rawText = `👋 Hola *${contact.fullName || 'Paciente'}*, le recordamos su turno en el *Consultorio Odontológico* con *${dentistName}*:
 
-📅 *Fecha:* ${formatDateWithDayName(selectedApptDetail.date)} (${selectedApptDetail.date})
+📅 *Fecha:* ${formatDateWithDayName(selectedApptDetail.date)}
 ⏰ *Hora:* ${selectedApptDetail.time} hs
 🩺 *Tratamiento:* ${selectedApptDetail.motive || 'Consulta General'}
 
@@ -1791,19 +1792,6 @@ ${cancelUrl}
                             } else if (cleanPhone.startsWith('54') && !cleanPhone.startsWith('549') && cleanPhone.length === 12) {
                               cleanPhone = '549' + cleanPhone.slice(2);
                             }
-
-                            // Eagerly sync appointment to server store so public endpoint has it instantly
-                            try {
-                              fetch('/api/sync/agenda', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                credentials: 'include',
-                                body: JSON.stringify({
-                                  appointments: [selectedApptDetail],
-                                  contacts: [contact],
-                                }),
-                              }).catch(() => {});
-                            } catch {}
 
                             // Mark as reminder sent on server
                             setSelectedApptDetail((prev: any) => ({

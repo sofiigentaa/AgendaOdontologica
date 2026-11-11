@@ -61,6 +61,28 @@ export function formatDuration(durationMinutes?: number): string {
  * @param fallbackYear current year if unspecified
  * @param fallbackMonth current 1-indexed month if unspecified
  */
+/**
+ * True only for dates that exist in the calendar (rejects 31/02, 31/04, 30/02...).
+ */
+export function isRealCalendarDate(y: number, m: number, d: number): boolean {
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false;
+  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
+/** Strict "YYYY-MM-DD" check that also rejects impossible dates. */
+export function isValidISODate(value: unknown): boolean {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map((n) => parseInt(n, 10));
+  return isRealCalendarDate(y, m, d);
+}
+
+function toISO(y: number, m: number, d: number): string | null {
+  if (!isRealCalendarDate(y, m, d)) return null;
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
 export function parseFlexibleDate(
   input: string,
   fallbackYear?: number,
@@ -77,17 +99,13 @@ export function parseFlexibleDate(
   // Check ISO format: YYYY-MM-DD
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
     const [y, m, d] = trimmed.split('-').map((n) => parseInt(n, 10));
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    }
+    return toISO(y, m, d);
   }
 
   // Check if just single/double digit day: "16" or "5"
   if (/^\d{1,2}$/.test(trimmed)) {
     const day = parseInt(trimmed, 10);
-    if (day >= 1 && day <= 31) {
-      return `${defYear}-${String(defMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    }
+    return toISO(defYear, defMonth, day);
   }
 
   // Check separators: slash (/), dash (-), dot (.)
@@ -96,9 +114,7 @@ export function parseFlexibleDate(
     // DD/MM -> current year
     const d = parseInt(parts[0], 10);
     const m = parseInt(parts[1], 10);
-    if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
-      return `${defYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    }
+    return toISO(defYear, m, d);
   } else if (parts.length === 3) {
     // Can be DD/MM/YYYY or YYYY/MM/DD
     let d = parseInt(parts[0], 10);
@@ -117,9 +133,7 @@ export function parseFlexibleDate(
       }
     }
 
-    if (d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 1900 && y <= 2100) {
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    }
+    return toISO(y, m, d);
   }
 
   return null;

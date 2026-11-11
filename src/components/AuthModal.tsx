@@ -165,7 +165,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
               <label className="text-xs font-semibold text-slate-700">Tu email</label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
+                <input aria-label="Tu email"
                   type="email"
                   required
                   data-testid="forgot-email"
@@ -197,7 +197,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
             <label className="text-xs font-semibold text-slate-700">Nombre del odontólogo</label>
             <div className="relative">
               <UserCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <input aria-label="Nombre del odontólogo"
                 type="text"
                 required
                 data-testid="register-name"
@@ -213,7 +213,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
             <label className="text-xs font-semibold text-slate-700">Email del consultorio</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <input aria-label="Email del consultorio"
                 type="email"
                 required
                 data-testid="register-email"
@@ -229,7 +229,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
             <label className="text-xs font-semibold text-slate-700">Contraseña (12 caracteres o más)</label>
             <div className="relative">
               <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <input aria-label="Contraseña (12 caracteres o más)"
                 type="password"
                 required
                 minLength={12}
@@ -271,7 +271,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
             <label className="text-xs font-semibold text-slate-700">Email del consultorio</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <input aria-label="Email del consultorio"
                 type="email"
                 required
                 data-testid="auth-email"
@@ -287,7 +287,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLoginSuccess }) => {
             <label className="text-xs font-semibold text-slate-700">Contraseña</label>
             <div className="relative">
               <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
+              <input aria-label="Contraseña"
                 type="password"
                 required
                 data-testid="auth-password"

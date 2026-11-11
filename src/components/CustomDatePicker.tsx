@@ -218,7 +218,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
                 {/* Quick Month & Year Dropdowns */}
                 <div className="flex items-center gap-2">
-                  <select
+                  <select aria-label="Mes"
                     value={viewMonth}
                     onChange={(e) => setViewMonth(parseInt(e.target.value, 10))}
                     className={`text-sm font-bold px-2.5 py-1.5 rounded-lg border cursor-pointer focus:outline-none ${
@@ -234,7 +234,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                     ))}
                   </select>
 
-                  <select
+                  <select aria-label="Año"
                     value={viewYear}
                     onChange={(e) => setViewYear(parseInt(e.target.value, 10))}
                     className={`text-sm font-bold px-2.5 py-1.5 rounded-lg border cursor-pointer focus:outline-none ${
@@ -384,7 +384,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
               {/* Quick Month & Year Dropdowns */}
               <div className="flex items-center gap-1.5">
-                <select
+                <select aria-label="Mes"
                   value={viewMonth}
                   onChange={(e) => setViewMonth(parseInt(e.target.value, 10))}
                   className={`text-xs font-bold px-2 py-1 rounded-md border cursor-pointer focus:outline-none ${
@@ -400,7 +400,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                   ))}
                 </select>
 
-                <select
+                <select aria-label="Año"
                   value={viewYear}
                   onChange={(e) => setViewYear(parseInt(e.target.value, 10))}
                   className={`text-xs font-bold px-2 py-1 rounded-md border cursor-pointer focus:outline-none ${

@@ -96,7 +96,7 @@ export async function clearAllFromSupabase(): Promise<void> {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ target: 'all', confirm: 'BORRAR' }),
     });
   } catch (e) {
     console.warn('Could not clear all from backend:', e);
@@ -109,7 +109,7 @@ export async function clearAppointmentsFromSupabase(): Promise<void> {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: 'appointments_only' }),
+      body: JSON.stringify({ target: 'appointments_only', confirm: 'BORRAR' }),
     });
   } catch (e) {
     console.warn('Could not clear appointments from backend:', e);
@@ -150,24 +150,67 @@ export function subscribeToSupabaseRealtime(onEvent: (payload: any) => void): ()
 // o borrado toca UN SOLO registro por id, no la lista completa.
 // -------------------------------------------------------------
 
-export async function upsertContact(contact: Contact): Promise<boolean> {
+export interface SaveResult {
+  ok: boolean;
+  status: number;
+  error?: string;
+  /** Present on 409: the appointment that overlaps. */
+  conflict?: { id: string; date: string; time: string; dentist?: string };
+}
+
+async function postRecord(url: string, body: unknown): Promise<SaveResult> {
   try {
-    const res = await fetch('/api/contacts', {
+    const res = await fetch(url, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(contact),
+      body: JSON.stringify(body),
     });
-    return res.ok;
+    if (res.ok) return { ok: true, status: res.status };
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      // respuesta sin JSON
+    }
+    return {
+      ok: false,
+      status: res.status,
+      error: json?.error || `El servidor respondió ${res.status}.`,
+      conflict: json?.conflict,
+    };
   } catch (e) {
-    console.warn('upsertContact error:', e);
-    return false;
+    console.warn(`POST ${url} error:`, e);
+    return { ok: false, status: 0, error: 'Sin conexión con el servidor. El cambio quedó solo en este dispositivo.' };
   }
+}
+
+export interface FreshList<T> {
+  records: T[];
+  /** Ids deleted on the server: must be removed from the local copy too. */
+  deletedIds: string[];
+}
+
+/** Returns null when the server could not be read (so callers don't mistake an error for "empty"). */
+async function fetchFresh<T>(url: string, key: string): Promise<FreshList<T> | null> {
+  try {
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json?.success) return null;
+    return { records: json[key] || [], deletedIds: json.deletedIds || [] };
+  } catch {
+    return null;
+  }
+}
+
+export function upsertContact(contact: Contact): Promise<SaveResult> {
+  return postRecord('/api/contacts', contact);
 }
 
 export async function deleteContactRemote(id: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE', credentials: 'include' });
+    const res = await fetch(`/api/contacts/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
     return res.ok;
   } catch (e) {
     console.warn('deleteContactRemote error:', e);
@@ -175,35 +218,21 @@ export async function deleteContactRemote(id: string): Promise<boolean> {
   }
 }
 
-export async function fetchContactsFresh(): Promise<Contact[]> {
-  try {
-    const res = await fetch('/api/contacts', { credentials: 'include' });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json?.contacts || [];
-  } catch {
-    return [];
-  }
+export function fetchContactsFresh(): Promise<FreshList<Contact> | null> {
+  return fetchFresh<Contact>('/api/contacts', 'contacts');
 }
 
-export async function upsertAppointment(appointment: Appointment): Promise<boolean> {
-  try {
-    const res = await fetch('/api/appointments', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appointment),
-    });
-    return res.ok;
-  } catch (e) {
-    console.warn('upsertAppointment error:', e);
-    return false;
-  }
+/**
+ * @param force true only when the user explicitly chose "Agendar de todos modos"
+ * after the overlap warning; the server validates it.
+ */
+export function upsertAppointment(appointment: Appointment, options: { force?: boolean } = {}): Promise<SaveResult> {
+  return postRecord('/api/appointments', options.force ? { ...appointment, force: true } : appointment);
 }
 
 export async function deleteAppointmentRemote(id: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE', credentials: 'include' });
+    const res = await fetch(`/api/appointments/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
     return res.ok;
   } catch (e) {
     console.warn('deleteAppointmentRemote error:', e);
@@ -211,13 +240,6 @@ export async function deleteAppointmentRemote(id: string): Promise<boolean> {
   }
 }
 
-export async function fetchAppointmentsFresh(): Promise<Appointment[]> {
-  try {
-    const res = await fetch('/api/appointments', { credentials: 'include' });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json?.appointments || [];
-  } catch {
-    return [];
-  }
+export function fetchAppointmentsFresh(): Promise<FreshList<Appointment> | null> {
+  return fetchFresh<Appointment>('/api/appointments', 'appointments');
 }

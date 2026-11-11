@@ -698,7 +698,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                       </span>
                       <span className="text-[10.5px] text-amber-700 font-medium hidden sm:inline">Ctrl + Enter para guardar</span>
                     </div>
-                    <textarea
+                    <textarea aria-label="Observaciones del paciente"
                       value={observationsText}
                       onChange={(e) => setObservationsText(e.target.value)}
                       placeholder="Escribir observaciones o notas del paciente (ej: preferencias de turnos, antecedentes, recomendaciones)..."
@@ -782,7 +782,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                   <span>Mensaje Predeterminado para WhatsApp</span>
                 </label>
                 <div className="flex gap-2">
-                  <input
+                  <input aria-label="Mensaje Predeterminado para WhatsApp"
                     type="text"
                     value={customWaMsg}
                     onChange={(e) => setCustomWaMsg(e.target.value)}
@@ -945,7 +945,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">Fecha</label>
-                      <input
+                      <input aria-label="Fecha del recordatorio"
                         type="date"
                         value={reminderDate}
                         onChange={(e) => setReminderDate(e.target.value)}
@@ -956,7 +956,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">Hora (24 hs)</label>
                       <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-xl px-2 py-1.5">
-                        <select
+                        <select aria-label="Hora del recordatorio"
                           value={(reminderTime || '09:00').split(':')[0] || '09'}
                           onChange={(e) => {
                             const h = e.target.value;
@@ -971,7 +971,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                           })}
                         </select>
                         <span className="font-bold text-slate-400">:</span>
-                        <select
+                        <select aria-label="Minutos del recordatorio"
                           value={(reminderTime || '09:00').split(':')[1] || '00'}
                           onChange={(e) => {
                             const m = e.target.value;
@@ -989,7 +989,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Nota del Recordatorio (Opcional)</label>
-                    <input
+                    <input aria-label="Nota del Recordatorio (Opcional)"
                       type="text"
                       value={reminderNote}
                       onChange={(e) => setReminderNote(e.target.value)}
@@ -1045,7 +1045,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             <div>
                               <label className="block text-[11px] font-bold text-slate-700 mb-1">Fecha</label>
-                              <input
+                              <input aria-label="Fecha del recordatorio"
                                 type="date"
                                 value={editingReminderDate}
                                 onChange={(e) => setEditingReminderDate(e.target.value)}
@@ -1056,7 +1056,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                             <div>
                               <label className="block text-[11px] font-bold text-slate-700 mb-1">Hora (24 hs)</label>
                               <div className="flex items-center gap-1 bg-white border border-amber-300 rounded-lg px-2 py-1">
-                                <select
+                                <select aria-label="Hora del recordatorio"
                                   value={(editingReminderTime || '09:00').split(':')[0] || '09'}
                                   onChange={(e) => {
                                     const h = e.target.value;
@@ -1071,7 +1071,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                                   })}
                                 </select>
                                 <span className="font-bold text-slate-400">:</span>
-                                <select
+                                <select aria-label="Minutos del recordatorio"
                                   value={(editingReminderTime || '09:00').split(':')[1] || '00'}
                                   onChange={(e) => {
                                     const m = e.target.value;
@@ -1090,7 +1090,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-700 mb-1">Nota del Recordatorio</label>
-                            <input
+                            <input aria-label="Nota del Recordatorio"
                               type="text"
                               value={editingReminderNote}
                               onChange={(e) => setEditingReminderNote(e.target.value)}
@@ -1286,7 +1286,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
 
               {/* Add Note Form */}
               <form onSubmit={handleCreateNoteSubmit} className="flex gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
-                <input
+                <input aria-label="Nueva nota del paciente"
                   ref={noteInputRef}
                   type="text"
                   value={newNoteText}
@@ -1331,7 +1331,7 @@ export const ContactDetailModal: React.FC<ContactDetailModalProps> = ({
                               {new Date(note.createdAt).toLocaleString()}
                             </span>
                           </div>
-                          <textarea
+                          <textarea aria-label="Contenido de la nota"
                             value={editingNoteText}
                             onChange={(e) => setEditingNoteText(e.target.value)}
                             onKeyDown={(e) => {

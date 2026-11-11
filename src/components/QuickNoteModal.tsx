@@ -159,7 +159,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                <input
+                <input aria-label="Buscar en las notas"
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -225,7 +225,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
                               {new Date(note.createdAt).toLocaleString()}
                             </span>
                           </div>
-                          <textarea
+                          <textarea aria-label="Contenido de la nota"
                             value={editingNoteText}
                             onChange={(e) => setEditingNoteText(e.target.value)}
                             onKeyDown={(e) => {
@@ -340,7 +340,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
                 <User className="w-3.5 h-3.5 text-[#2E7D5E]" />
                 <span>Seleccionar Paciente / Ficha</span>
               </label>
-              <select
+              <select aria-label="Seleccionar Paciente / Ficha"
                 value={contactId}
                 onChange={(e) => setContactId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-[#333333] focus:outline-none focus:ring-2 focus:ring-[#4CAF7D] focus:border-[#4CAF7D]"
@@ -359,7 +359,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
               <label className="block text-xs font-bold text-[#333333] mb-1.5">
                 Contenido de la Nota
               </label>
-              <textarea
+              <textarea aria-label="Contenido de la Nota"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Escriba aquí la nota, indicación clínica, observación o recordatorio para la ficha del paciente..."

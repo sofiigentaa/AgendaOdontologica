@@ -52,17 +52,8 @@ if (typeof window !== 'undefined') {
       localStorage.setItem(INSURANCE_FILES_KEY, JSON.stringify([]));
       
       localStorage.setItem('mi_agenda_purged_v6', 'true');
-      
-      // Wipe sample data from Supabase & Firestore in background
-      clearAllFromSupabase().catch(() => {});
-      syncToFirestore({
-        contacts: [],
-        appointments: [],
-        reminders: [],
-        notes: [],
-        attachments: [],
-        insuranceFiles: [],
-      }).catch(() => {});
+      // Solo se limpia este navegador. (Antes también se borraban las tablas
+      // remotas: un navegador nuevo podía vaciar la agenda de todo el equipo.)
     }
   } catch (e) {
     console.warn('Purge legacy storage check failed:', e);
@@ -97,8 +88,10 @@ export function getStoredContacts(): Contact[] {
 
 export function saveStoredContacts(contacts: Contact[]): void {
   try {
+    // Solo copia local. El servidor se actualiza registro por registro
+    // (upsertContact / deleteContactRemote): mandar la lista completa revivía
+    // pacientes borrados en otro equipo.
     localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
-    syncToCloudDatabase({ contacts });
   } catch (e) {
     console.error('Error saving contacts', e);
   }
@@ -221,8 +214,9 @@ export function getStoredAppointments(): Appointment[] {
 
 export function saveStoredAppointments(appointments: Appointment[]): void {
   try {
+    // Solo copia local. El servidor se actualiza registro por registro
+    // (upsertAppointment / deleteAppointmentRemote), que valida superposición.
     localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
-    syncToCloudDatabase({ appointments });
   } catch (e) {
     console.error('Error saving appointments', e);
   }
@@ -276,11 +270,9 @@ export function resetToSampleData(): void {
   localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(INITIAL_APPOINTMENTS));
   localStorage.setItem(INSURANCE_FILES_KEY, JSON.stringify(INITIAL_INSURANCE_FILES));
   syncToCloudDatabase({
-    contacts: INITIAL_CONTACTS,
     reminders: INITIAL_REMINDERS,
     notes: INITIAL_NOTES,
     attachments: INITIAL_ATTACHMENTS,
-    appointments: INITIAL_APPOINTMENTS,
     insuranceFiles: INITIAL_INSURANCE_FILES,
   });
 }
@@ -310,7 +302,7 @@ export function clearAllAgendaData(): void {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ target: 'all' }),
+    body: JSON.stringify({ target: 'all', confirm: 'BORRAR' }),
   }).catch((err) => console.warn('Error clearing cloud DB:', err));
 }
 
@@ -329,7 +321,7 @@ export function clearAppointmentsOnly(): void {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ target: 'appointments_only' }),
+    body: JSON.stringify({ target: 'appointments_only', confirm: 'BORRAR' }),
   }).catch((err) => console.warn('Error clearing appointments in cloud DB:', err));
 }
 
@@ -348,7 +340,7 @@ export function clearRemindersOnly(): void {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ target: 'reminders_only' }),
+    body: JSON.stringify({ target: 'reminders_only', confirm: 'BORRAR' }),
   }).catch((err) => console.warn('Error clearing reminders in cloud DB:', err));
 }
 

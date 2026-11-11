@@ -32,3 +32,14 @@ describe('matchesDentistFilter', () => {
     expect(matchesDentistFilter('Marie', 'Ambas')).toBe(false);
   });
 });
+
+describe('parseDentist', () => {
+  it('acepta variantes conocidas y rechaza nombres desconocidos', async () => {
+    const { parseDentist } = await import('./dentist');
+    expect(parseDentist('Dra. Yani')).toBe('Yani');
+    expect(parseDentist('marie')).toBe('Marie');
+    expect(parseDentist('Ambas')).toBe('Ambas');
+    expect(parseDentist('Hacker')).toBeNull();
+    expect(parseDentist('')).toBeNull();
+  });
+});

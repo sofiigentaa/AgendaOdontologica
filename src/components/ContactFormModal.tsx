@@ -16,13 +16,43 @@ import {
 } from 'lucide-react';
 import { Contact } from '../types';
 import { OBRAS_SOCIALES_LIST } from '../constants/insurances';
-import { isValidEmailAddress, isValidPersonName, isValidPhoneNumber } from '../utils/inputValidation';
+import {
+  isValidEmailAddress,
+  isValidPersonName,
+  isValidPhoneNumber,
+  MAX_EMAIL_LENGTH,
+  MAX_LONG_TEXT_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PHONE_LENGTH,
+  MAX_SHORT_TEXT_LENGTH,
+  normalizeForSearch,
+  normalizePhoneForCompare,
+} from '../utils/inputValidation';
 
 interface ContactFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (contactData: Partial<Contact>) => void;
   initialData?: Contact | null;
+  /** Used to warn before registering a duplicate patient. */
+  existingContacts?: Contact[];
+}
+
+/** Patients with the same normalized phone or the same normalized name. */
+export function findDuplicateContacts(
+  contacts: Contact[],
+  candidate: { id?: string; fullName: string; primaryPhone: string; altPhone?: string }
+): Contact[] {
+  const name = normalizeForSearch(candidate.fullName);
+  const phones = [candidate.primaryPhone, candidate.altPhone]
+    .map(normalizePhoneForCompare)
+    .filter((p) => p.length >= 6);
+  return contacts.filter((c) => {
+    if (candidate.id && c.id === candidate.id) return false;
+    if (name && normalizeForSearch(c.fullName) === name) return true;
+    const theirs = [c.primaryPhone, c.altPhone].map(normalizePhoneForCompare).filter((p) => p.length >= 6);
+    return phones.some((p) => theirs.includes(p));
+  });
 }
 
 const normalizeSearch = (text: string) =>
@@ -42,7 +72,9 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
   onClose,
   onSave,
   initialData,
+  existingContacts = [],
 }) => {
+  const [duplicateWarning, setDuplicateWarning] = useState<Contact[] | null>(null);
   const [fullName, setFullName] = useState('');
   const [isParticular, setIsParticular] = useState(false);
   const [insuranceQuery, setInsuranceQuery] = useState('');
@@ -62,6 +94,7 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
     primaryPhone?: string;
     altPhone?: string;
     email?: string;
+    insurance?: string;
   }>({});
 
   // Close dropdown when clicking outside
@@ -92,9 +125,10 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
       setIsFavorite(initialData.isFavorite ?? false);
       setAvatarColor(initialData.avatarColor || 'bg-[#2E7D5E]');
     } else {
-      // Reset defaults for new contact
+      // Reset defaults for new contact. "Particular" por defecto: antes quedaba
+      // como "Obra Social" genérica si no se elegía nada.
       setFullName('');
-      setIsParticular(false);
+      setIsParticular(true);
       setInsuranceQuery('');
       setAffiliateNumber('');
       setPrimaryPhone('');
@@ -107,7 +141,13 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
     }
     setIsInsuranceDropdownOpen(false);
     setErrors({});
+    setDuplicateWarning(null);
   }, [initialData, isOpen]);
+
+  // Si cambian nombre o teléfonos, el aviso de duplicado se vuelve a evaluar.
+  useEffect(() => {
+    setDuplicateWarning(null);
+  }, [fullName, primaryPhone, altPhone]);
 
   const filteredInsurances = useMemo(() => {
     const q = normalizeSearch(insuranceQuery);
@@ -134,10 +174,13 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
     if (!primaryPhone.trim()) {
       newErrors.primaryPhone = 'El teléfono principal es obligatorio';
     } else if (!isValidPhoneNumber(primaryPhone)) {
-      newErrors.primaryPhone = 'Ingresá un teléfono válido con al menos 6 dígitos.';
+      newErrors.primaryPhone = 'Ingresá un teléfono válido, de 8 a 15 dígitos (ej: 341 555-1234).';
     }
     if (altPhone.trim() && !isValidPhoneNumber(altPhone)) {
-      newErrors.altPhone = 'Ingresá un teléfono válido con al menos 6 dígitos.';
+      newErrors.altPhone = 'Ingresá un teléfono válido, de 8 a 15 dígitos (ej: 341 555-1234).';
+    }
+    if (!isParticular && !insuranceQuery.trim()) {
+      newErrors.insurance = 'Elegí la obra social o marcá "Particular".';
     }
     if (email.trim() && !isValidEmailAddress(email)) {
       newErrors.email = 'Ingresá un correo electrónico válido.';
@@ -148,9 +191,21 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
       return;
     }
 
-    const finalInsurance = isParticular 
-      ? 'Particular' 
-      : (insuranceQuery.trim() || 'Obra Social');
+    if (!duplicateWarning) {
+      const duplicates = findDuplicateContacts(existingContacts, {
+        id: initialData?.id,
+        fullName,
+        primaryPhone,
+        altPhone,
+      });
+      if (duplicates.length > 0) {
+        // Primer intento: se avisa. Si vuelve a guardar, se registra igual.
+        setDuplicateWarning(duplicates);
+        return;
+      }
+    }
+
+    const finalInsurance = isParticular ? 'Particular' : insuranceQuery.trim();
 
     onSave({
       fullName: fullName.trim(),
@@ -214,10 +269,11 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Nombre y Apellido <span className="text-rose-500">*</span>
               </label>
-              <input
+              <input aria-label="Nombre y Apellido"
                 type="text"
                 data-testid="contact-fullname"
                 value={fullName}
+                maxLength={MAX_NAME_LENGTH}
                 onChange={(e) => {
                   setFullName(e.target.value);
                   if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: undefined }));
@@ -303,9 +359,13 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                       onChange={(e) => {
                         setInsuranceQuery(e.target.value);
                         setIsInsuranceDropdownOpen(true);
+                        if (errors.insurance) setErrors((prev) => ({ ...prev, insurance: undefined }));
                       }}
                       onFocus={() => setIsInsuranceDropdownOpen(true)}
                       placeholder="Seleccione o escriba para buscar..."
+                      aria-label="Nombre de obra social o prepaga"
+                      maxLength={MAX_SHORT_TEXT_LENGTH}
+                      aria-invalid={Boolean(errors.insurance)}
                       className="w-full pl-9 pr-16 py-2 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#2E7D5E] focus:border-[#2E7D5E]"
                     />
                     
@@ -382,6 +442,9 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                       </div>
                     </div>
                   )}
+                  {errors.insurance && (
+                    <p className="text-xs text-rose-500 mt-1 font-medium">{errors.insurance}</p>
+                  )}
                 </div>
 
                 {/* Affiliate Number Field (Campo opcional para numero de afiliado) */}
@@ -395,6 +458,8 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                     <input
                       type="text"
                       value={affiliateNumber}
+                      maxLength={MAX_SHORT_TEXT_LENGTH}
+                      aria-label="Número de afiliado"
                       onChange={(e) => setAffiliateNumber(e.target.value)}
                       placeholder="Ej: 12-345678-01"
                       className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -427,11 +492,12 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
+                  <input aria-label="Teléfono Principal"
                     type="tel"
                     inputMode="tel"
                     data-testid="contact-phone"
                     value={primaryPhone}
+                    maxLength={MAX_PHONE_LENGTH}
                     onChange={(e) => {
                       setPrimaryPhone(e.target.value);
                       if (errors.primaryPhone) setErrors((prev) => ({ ...prev, primaryPhone: undefined }));
@@ -455,10 +521,11 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
+                  <input aria-label="Teléfono Alternativo (Opcional)"
                     type="tel"
                     inputMode="tel"
                     value={altPhone}
+                    maxLength={MAX_PHONE_LENGTH}
                     onChange={(e) => {
                       setAltPhone(e.target.value);
                       if (errors.altPhone) setErrors((prev) => ({ ...prev, altPhone: undefined }));
@@ -480,9 +547,10 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
+                  <input aria-label="Correo Electrónico (Opcional)"
                     type="email"
                     value={email}
+                    maxLength={MAX_EMAIL_LENGTH}
                     onChange={(e) => {
                       setEmail(e.target.value);
                       if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
@@ -504,9 +572,10 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
                 </label>
                 <div className="relative">
                   <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
+                  <input aria-label="Dirección (Opcional)"
                     type="text"
                     value={address}
+                    maxLength={MAX_SHORT_TEXT_LENGTH * 2}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="Ej: Av. Santa Fe 1234, CABA"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
@@ -528,14 +597,29 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
               </span>
               <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
             </label>
-            <textarea
+            <textarea aria-label="Observaciones o Notas Adicionales (Opcional)"
               rows={3}
               value={observations}
+              maxLength={MAX_LONG_TEXT_LENGTH}
               onChange={(e) => setObservations(e.target.value)}
               placeholder="Ej: Días y horarios de atención, especialidad, requerimiento de órdenes..."
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all resize-none"
             />
           </div>
+
+          {duplicateWarning && duplicateWarning.length > 0 && (
+            <div role="alert" className="p-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs space-y-1">
+              <p className="font-bold">Ya existe un paciente parecido:</p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {duplicateWarning.slice(0, 3).map((c) => (
+                  <li key={c.id} className="break-words">
+                    {c.fullName} — {c.primaryPhone}
+                  </li>
+                ))}
+              </ul>
+              <p>Revisá que no sea la misma persona. Si es otro paciente, tocá "Registrar igual".</p>
+            </div>
+          )}
 
           {/* Form Actions */}
           <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
@@ -551,7 +635,7 @@ export const ContactFormModal: React.FC<ContactFormModalProps> = ({
               type="submit"
               className="px-6 py-2.5 rounded-xl bg-[#4CAF7D] hover:bg-[#3d986b] text-white text-sm font-bold shadow-md transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
             >
-              {initialData ? 'Guardar Cambios' : 'Registrar Contacto'}
+              {duplicateWarning ? 'Registrar igual' : initialData ? 'Guardar Cambios' : 'Registrar Contacto'}
             </button>
           </div>
 

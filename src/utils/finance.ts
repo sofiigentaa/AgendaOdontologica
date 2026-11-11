@@ -49,11 +49,13 @@ export function calculateTurnStats(appt?: Appointment | null): TurnFinanceStats 
   }
 
   const isAttended = isApptAttended(appt);
-  const ingresos = Number(appt.ingresos) || 0;
-  const descartables = Number(appt.descartables) || 0;
-  const estampillas = Number(appt.estampillas) || 0;
-  const materiales = Number(appt.materiales) || 0;
-  const mecanico = Number(appt.mecanicoDental) || 0;
+  // Montos negativos no tienen sentido (un "egreso negativo" inflaba la ganancia).
+  const amount = (v: unknown) => Math.max(0, Number(v) || 0);
+  const ingresos = amount(appt.ingresos);
+  const descartables = amount(appt.descartables);
+  const estampillas = amount(appt.estampillas);
+  const materiales = amount(appt.materiales);
+  const mecanico = amount(appt.mecanicoDental);
   const totalEgresos = descartables + estampillas + materiales + mecanico;
   const balanceNeto = Math.max(0, ingresos - totalEgresos);
   const rawPct =

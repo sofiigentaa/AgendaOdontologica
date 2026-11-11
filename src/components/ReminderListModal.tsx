@@ -155,7 +155,7 @@ export const ReminderListModal: React.FC<ReminderListModalProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           <div>
                             <label className="block text-[11px] font-bold text-slate-700 mb-1">Fecha</label>
-                            <input
+                            <input aria-label="Fecha del recordatorio"
                               type="date"
                               value={editingDate}
                               onChange={(e) => setEditingDate(e.target.value)}
@@ -166,7 +166,7 @@ export const ReminderListModal: React.FC<ReminderListModalProps> = ({
                           <div>
                             <label className="block text-[11px] font-bold text-slate-700 mb-1">Hora (24 hs)</label>
                             <div className="flex items-center gap-1 bg-white border border-amber-300 rounded-lg px-2 py-1">
-                              <select
+                              <select aria-label="Hora del recordatorio"
                                 value={(editingTime || '09:00').split(':')[0] || '09'}
                                 onChange={(e) => {
                                   const h = e.target.value;
@@ -181,7 +181,7 @@ export const ReminderListModal: React.FC<ReminderListModalProps> = ({
                                 })}
                               </select>
                               <span className="font-bold text-slate-400">:</span>
-                              <select
+                              <select aria-label="Minutos del recordatorio"
                                 value={(editingTime || '09:00').split(':')[1] || '00'}
                                 onChange={(e) => {
                                   const m = e.target.value;
@@ -200,7 +200,7 @@ export const ReminderListModal: React.FC<ReminderListModalProps> = ({
 
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">Nota del Recordatorio</label>
-                          <input
+                          <input aria-label="Nota del Recordatorio"
                             type="text"
                             value={editingNote}
                             onChange={(e) => setEditingNote(e.target.value)}

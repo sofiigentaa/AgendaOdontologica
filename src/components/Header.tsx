@@ -160,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-3 sm:px-6 lg:px-8 py-2.5 space-y-2.5">
         
         {/* Main Row: Brand Logo, Navigation Tabs & Right-side Action Tools */}
-        <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center justify-between gap-x-3 gap-y-2 flex-wrap 2xl:flex-nowrap">
           
           {/* Title & Brand Isotype */}
           <div className="flex items-center gap-2.5 shrink-0">
@@ -239,7 +239,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Tools (Google Account, Cloud Sync & Clean Export Dropdown) */}
-          <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+          <div className="flex items-center justify-end flex-wrap gap-2 min-w-0 ml-auto">
             
             {/* Cloud Sync Button */}
             {onManualSync && (
@@ -613,7 +613,7 @@ export const Header: React.FC<HeaderProps> = ({
                   className="relative inline-block shrink-0" 
                   title={selectedFilter === 'particular' ? 'Desactiva el filtro Particular para filtrar por Obra Social o Prepaga' : 'Filtrar por Obra Social / Prepaga'}
                 >
-                  <select
+                  <select aria-label="Filtrar por obra social o prepaga"
                     disabled={selectedFilter === 'particular'}
                     value={selectedFilter === 'particular' ? '' : selectedInsurance}
                     onChange={(e) => {

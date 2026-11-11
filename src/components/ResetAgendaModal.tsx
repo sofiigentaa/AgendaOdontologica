@@ -185,7 +185,7 @@ export const ResetAgendaModal: React.FC<ResetAgendaModalProps> = ({
               <p className="text-[11px] text-rose-700">
                 Esta acción no se puede deshacer. Escribe la palabra <strong>BORRAR</strong> abajo para confirmar:
               </p>
-              <input
+              <input aria-label="Escribí BORRAR para confirmar"
                 type="text"
                 value={confirmInput}
                 onChange={(e) => setConfirmInput(e.target.value)}

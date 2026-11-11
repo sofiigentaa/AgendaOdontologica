@@ -113,7 +113,7 @@ export const CustomTimePicker: React.FC<CustomTimePickerProps> = ({
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
                 Hora (00 - 23)
               </label>
-              <select
+              <select aria-label="Hora (00 - 23)"
                 value={currentHour}
                 onChange={(e) => handleHourChange(parseInt(e.target.value, 10))}
                 className="w-full bg-white border border-slate-300 rounded-lg py-1 px-2 text-xs font-bold text-slate-800 font-mono focus:outline-none focus:ring-1 focus:ring-[#2E7D5E]"
@@ -130,7 +130,7 @@ export const CustomTimePicker: React.FC<CustomTimePickerProps> = ({
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">
                 Minutos
               </label>
-              <select
+              <select aria-label="Minutos"
                 value={currentMinute}
                 onChange={(e) => handleMinuteChange(parseInt(e.target.value, 10))}
                 className="w-full bg-white border border-slate-300 rounded-lg py-1 px-2 text-xs font-bold text-slate-800 font-mono focus:outline-none focus:ring-1 focus:ring-[#2E7D5E]"

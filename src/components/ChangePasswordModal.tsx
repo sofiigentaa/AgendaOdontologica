@@ -100,7 +100,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold text-slate-700">Nueva contraseña</label>
-                <input
+                <input aria-label="Nueva contraseña"
                   type="password"
                   required
                   minLength={12}
@@ -113,7 +113,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold text-slate-700">Repetir nueva contraseña</label>
-                <input
+                <input aria-label="Repetir nueva contraseña"
                   type="password"
                   required
                   minLength={12}

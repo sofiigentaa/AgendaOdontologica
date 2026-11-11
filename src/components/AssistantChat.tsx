@@ -486,7 +486,7 @@ export const AssistantChat: React.FC<AssistantChatProps> = ({
             </div>
 
             {/* Note Textarea */}
-            <textarea
+            <textarea aria-label="Añadir Nota / Observación al Paciente"
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="Escriba la nota u observación para agregar a la ficha del paciente..."
@@ -498,7 +498,7 @@ export const AssistantChat: React.FC<AssistantChatProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               {/* Select Patient */}
               <div className="flex-1 min-w-[160px]">
-                <select
+                <select aria-label="Paciente de la nota"
                   value={noteContactId}
                   onChange={(e) => setNoteContactId(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-400"
@@ -694,7 +694,7 @@ export const AssistantChat: React.FC<AssistantChatProps> = ({
         }}
         className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2"
       >
-        <input
+        <input aria-label="Mensaje para el asistente"
           ref={inputRef}
           type="text"
           value={input}

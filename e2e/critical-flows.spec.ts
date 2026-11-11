@@ -1,16 +1,33 @@
 import { expect, Page, test } from '@playwright/test';
 
-const isRemote = Boolean(process.env.PLAYWRIGHT_BASE_URL);
+// Contra un servidor externo no se crean datos, salvo que se pida explícitamente
+// (p. ej. un servidor de prueba sin base de datos).
+const isRemote = Boolean(process.env.PLAYWRIGHT_BASE_URL) && process.env.E2E_ALLOW_WRITES !== 'true';
 
+/**
+ * Entra a la agenda.
+ * - Instancia demo (DEMO_MODE=true, que es como levanta el servidor local de
+ *   la suite): no hay pantalla de ingreso, la app abre directo.
+ * - Instancia real: usa una cuenta de prueba de Supabase tomada de
+ *   E2E_EMAIL / E2E_PASSWORD. Sin esas variables, el test se omite (antes se
+ *   usaba una clave fija "admin123" que ya no existe).
+ */
 async function login(page: Page) {
   await page.goto('/');
-  const email = page.getByTestId('auth-email').or(page.getByPlaceholder(/odontologo@/i));
-  const password = page.getByTestId('auth-password').or(page.getByPlaceholder('••••••••'));
-  await expect(email).toBeVisible();
-  await email.fill('e2e@consultorio.test');
-  await password.fill('admin123');
-  await page.getByTestId('auth-submit').or(page.getByRole('button', { name: 'Ingresar' })).click();
-  await expect(page.getByTestId('auth-email').or(page.getByPlaceholder(/odontologo@/i))).toBeHidden({ timeout: 10_000 });
+  const appShell = page.locator('#tab-calendar-main:visible, #mobile-bottom-nav:visible').first();
+  const authEmail = page.getByTestId('auth-email');
+  await expect(appShell.or(authEmail)).toBeVisible({ timeout: 20_000 });
+
+  if (await authEmail.isVisible()) {
+    const email = process.env.E2E_EMAIL;
+    const password = process.env.E2E_PASSWORD;
+    test.skip(!email || !password, 'Instancia con login: definir E2E_EMAIL y E2E_PASSWORD (cuenta de prueba de Supabase).');
+    await authEmail.fill(email!);
+    await page.getByTestId('auth-password').fill(password!);
+    await page.getByTestId('auth-submit').click();
+    await expect(authEmail).toBeHidden({ timeout: 15_000 });
+  }
+  await expect(appShell).toBeVisible();
 }
 
 async function createPatient(page: Page, name: string) {
@@ -19,7 +36,8 @@ async function createPatient(page: Page, name: string) {
   const modal = page.locator('#modal-contact-form');
   await expect(modal).toBeVisible();
   await page.getByTestId('contact-fullname').or(page.getByPlaceholder(/Martín González/i)).fill(name);
-  await page.getByTestId('contact-phone').or(page.getByPlaceholder(/5491145892020/)).fill('3415550199');
+  // Teléfono único por corrida: la app avisa si el teléfono ya existe (duplicados).
+  await page.getByTestId('contact-phone').or(page.getByPlaceholder(/5491145892020/)).fill(`341${String(Date.now()).slice(-7)}`);
   await modal.getByRole('button', { name: /Registrar Contacto/ }).click();
   await expect(modal).toBeHidden();
   await expect(page.getByText(`Nuevo contacto "${name}" registrado`)).toBeVisible();
@@ -44,7 +62,9 @@ test.describe('Flujos críticos de consultorio', () => {
   test('alta completa de un turno: paciente, formulario y guardar', async ({ page }) => {
     test.skip(isRemote, 'No crear pacientes de prueba en el deploy público');
 
-    const patientName = `Paciente E2E ${Date.now()}`;
+    // El nombre solo admite letras: sufijo único con letras en vez de dígitos.
+    const uniqueLetters = String(Date.now()).slice(-6).replace(/\d/g, (d) => 'abcdefghij'[Number(d)]);
+    const patientName = `Paciente Prueba ${uniqueLetters}`;
     await login(page);
     await createPatient(page, patientName);
 
