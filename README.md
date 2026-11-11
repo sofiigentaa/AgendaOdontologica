@@ -2,7 +2,7 @@
 
 Agenda web para un consultorio con dos odontólogas: pacientes, turnos, ficha clínica y liquidación diaria.
 
-**Demo:** [https://agendaodontologica-cuvt.onrender.com](https://agendaodontologica-cuvt.onrender.com)
+**Demo:** [https://agendaodontologica-iond.onrender.com](https://agendaodontologica-iond.onrender.com)
 
 ## Deploy (Render)
 

@@ -17,7 +17,7 @@ export const ShareAppModal: React.FC<ShareAppModalProps> = ({
   if (!isOpen) return null;
 
   // Determine cleanest shareable URL
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://agendaodontologica-cuvt.onrender.com';
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://agendaodontologica-iond.onrender.com';
 
   const copyToClipboard = async () => {
     try {

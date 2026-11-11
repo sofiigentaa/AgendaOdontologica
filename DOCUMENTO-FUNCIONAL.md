@@ -2,7 +2,7 @@
 
 **Sistema:** Consultorio Marie & Yani  
 **Versión:** mi-agenda(8)  
-**Demo:** https://agendaodontologica-cuvt.onrender.com  
+**Demo:** https://agendaodontologica-iond.onrender.com  
 **Alcance:** herramienta de gestión de agenda para un consultorio con dos odontólogas.
 
 ## 1. Objetivo
