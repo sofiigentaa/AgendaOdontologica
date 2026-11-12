@@ -101,6 +101,44 @@ test.describe('Flujos críticos de consultorio', () => {
     await expect(page.getByText(patientName).first()).toBeVisible();
   });
 
+  // BUG-030: cuando el servidor rechaza el turno (otro equipo ocupó el horario),
+  // el aviso tiene que verse como error, no con el check verde de éxito.
+  test('rechazo del servidor al agendar se muestra como error', async ({ page }) => {
+    test.skip(isRemote, 'No crear pacientes de prueba en el deploy público');
+
+    const uniqueLetters = String(Date.now()).slice(-6).replace(/\d/g, (d) => 'abcdefghij'[Number(d)]);
+    const patientName = `Paciente Rechazo ${uniqueLetters}`;
+    await login(page);
+    await createPatient(page, patientName);
+
+    // Simula que otro equipo ya ocupó el horario: el servidor responde 409.
+    await page.route('**/api/appointments', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, error: 'Ese horario se superpone con otro turno (09:00 hs).' }),
+      });
+    });
+
+    await page.locator('#tab-calendar-main').click();
+    await page.getByTestId('btn-add-turno-today').click();
+    await expect(page.locator('#modal-schedule-appointment')).toBeVisible();
+    await page.locator('#select-appointment-patient-autocomplete').click();
+    await page.locator('#select-appointment-patient-autocomplete').fill(patientName);
+    await page.getByRole('option', { name: new RegExp(patientName) }).click();
+    await page.getByTestId('dentist-marie').click();
+    await page.getByTestId('treatment-consulta').click();
+    await page.getByTestId('appt-save').click();
+    const scheduleAnyway = page.getByRole('button', { name: 'Agendar de todos modos' });
+    await scheduleAnyway.waitFor({ state: 'visible', timeout: 2500 }).then(() => scheduleAnyway.click()).catch(() => undefined);
+
+    const toast = page.getByTestId('toast');
+    await expect(toast).toContainText('No se guardó el turno');
+    await expect(toast).toHaveAttribute('data-variant', 'error');
+    await expect(toast).toHaveAttribute('role', 'alert');
+  });
+
   test('abre el módulo de finanzas y muestra liquidación', async ({ page }) => {
     await login(page);
     await page.locator('#btn-open-finances').or(page.getByRole('button', { name: /Finanzas/ }).first()).click();

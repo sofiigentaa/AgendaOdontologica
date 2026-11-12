@@ -52,7 +52,7 @@ import { PatientConfirmationView } from './components/PatientConfirmationView';
 import { AuthModal } from './components/AuthModal';
 import { ResetPasswordView } from './components/ResetPasswordView';
 import { AssistantChat } from './components/AssistantChat';
-import { Toast } from './components/Toast';
+import { Toast, ToastVariant } from './components/Toast';
 import { PatientSearchSelect } from './components/PatientSearchSelect';
 import { GoogleActionModal, GoogleActionType } from './components/GoogleActionModal';
 import { initAuth, googleSignIn, logoutGoogle, getAccessToken } from './services/googleAuth';
@@ -268,6 +268,7 @@ export default function App() {
 
   // Toast state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVariant, setToastVariant] = useState<ToastVariant>('success');
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
 
   // Authentication gate for dental team
@@ -724,12 +725,12 @@ export default function App() {
     }
     if (result.status === 0) {
       // Sin conexión: el cambio queda local y se reintenta al volver.
-      showToast(`⚠️ ${result.error}`);
+      showToast(`⚠️ ${result.error}`, 'warning');
       return false;
     }
     setAppointments(previousList);
     saveStoredAppointments(previousList);
-    showToast(`❌ No se guardó el turno: ${result.error}`);
+    showToast(`❌ No se guardó el turno: ${result.error}`, 'error');
     return false;
   };
 
@@ -744,12 +745,12 @@ export default function App() {
       return true;
     }
     if (result.status === 0) {
-      showToast(`⚠️ ${result.error}`);
+      showToast(`⚠️ ${result.error}`, 'warning');
       return false;
     }
     setContacts(previousList);
     saveStoredContacts(previousList);
-    showToast(`❌ No se guardó el paciente: ${result.error}`);
+    showToast(`❌ No se guardó el paciente: ${result.error}`, 'error');
     return false;
   };
 
@@ -782,7 +783,8 @@ export default function App() {
     syncToSupabase({ insuranceFiles: newFiles });
   };
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, variant: ToastVariant = 'success') => {
+    setToastVariant(variant);
     setToastMessage(msg);
   };
 
@@ -901,7 +903,7 @@ export default function App() {
     const updated = appointments.filter((a) => a.id !== appointmentId);
     updateAppointments(updated);
     deleteAppointmentRemote(appointmentId).then((ok) => {
-      if (!ok) showToast('⚠️ El turno se quitó en este equipo, pero el servidor no confirmó el borrado.');
+      if (!ok) showToast('⚠️ El turno se quitó en este equipo, pero el servidor no confirmó el borrado.', 'warning');
     });
     showToast('Turno eliminado del calendario');
   };
@@ -1092,7 +1094,7 @@ export default function App() {
     updateContacts(filteredC);
     if (removedAppts.length > 0) updateAppointments(filteredAppts);
     deleteContactRemote(deletingContact.id).then((ok) => {
-      if (!ok) showToast('⚠️ El paciente se quitó en este equipo, pero el servidor no confirmó el borrado.');
+      if (!ok) showToast('⚠️ El paciente se quitó en este equipo, pero el servidor no confirmó el borrado.', 'warning');
     });
     updateReminders(filteredR);
     updateNotes(filteredN);
@@ -1803,7 +1805,7 @@ export default function App() {
         isExecuting={isExecutingGoogleAction}
       />
 
-      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      <Toast message={toastMessage} variant={toastVariant} onClose={() => setToastMessage(null)} />
 
       {/* Native Mobile Bottom Navigation Bar (Visible only on mobile screens) */}
       <nav 
